@@ -172,7 +172,6 @@ class Moleskin:
         :param diff_filename: The filename for the diff file.
         :return: None
         """
-        self.green(self.log_directory)
         if log_directory is None:
             log_directory = os.path.realpath(self.log_directory)
         try:
