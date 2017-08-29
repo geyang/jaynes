@@ -164,19 +164,20 @@ class Moleskin:
         self.error(*args, **kwargs)
         raise exception
 
-    def diff(self, file, log_directory=None, diff_filename="index.diff"):
+    def diff(self, diff_directory=".", log_directory=None, diff_filename="index.diff"):
         """
-        example usage: M.diff(__file__, )
-        :param file: The file that is calling this method, used to figure out the root directory to call `git diff`.
+        example usage: M.diff('.')
+        :param diff_directory: The root directory to call `git diff`.
         :param log_directory: The overriding log directory to save this diff index file
         :param diff_filename: The filename for the diff file.
         :return: None
         """
+        self.green(self.log_directory)
         if log_directory is None:
             log_directory = os.path.realpath(self.log_directory)
         try:
             cmd = "cd {} && git diff > {} 2>/dev/null" \
-                .format(os.path.dirname(file),
+                .format(os.path.realpath(diff_directory),
                         os.path.join(log_directory, diff_filename))
             subprocess.check_call(cmd, shell=True)  # Save git diff to experiment directory
         except subprocess.CalledProcessError as e:

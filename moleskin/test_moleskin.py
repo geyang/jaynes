@@ -62,7 +62,7 @@ def test_timing():
 def test_diff():
     M = Moleskin(file='./test-logs/diff_log.log')
 
-    M.diff(__file__)
+    M.diff('.')
 
     file = open('./test-logs/index.diff')
     diff = file.read()
