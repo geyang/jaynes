@@ -4,7 +4,7 @@ setup(name="moleskin",
       description="A print and debugging utility that makes your error printouts look nice",
       long_description="Moleskin makes it easy to make pretty debug and color prints in terminals, time function "
                        "calls, and diff current repo with git diff.",
-      version="0.1.0",
+      version="0.1.1",
       url="https://github.com/episodeyang/moleskin",
       author="Ge Yang",
       author_email="yangge1987@gmail.com",
