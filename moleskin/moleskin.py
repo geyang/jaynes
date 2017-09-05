@@ -2,7 +2,7 @@ import os
 import sys
 import time
 import traceback
-from functools import wraps
+from boltons.funcutils import wraps
 from pprint import pprint
 import subprocess
 from termcolor import cprint as _cprint
