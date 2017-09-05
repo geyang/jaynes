@@ -83,7 +83,7 @@ class Moleskin:
     def pprint(self, *args, **kwargs):
         if self.log_file and 'file' not in kwargs:
             with open(self.log_file, 'a+') as logfile:
-                pprint(*args, **kwargs, file=logfile)
+                pprint(*args, **kwargs, stream=logfile)
         pprint(*args, **kwargs)
         sys.stdout.flush()
 

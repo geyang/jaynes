@@ -27,6 +27,7 @@ def test_file_output():
 
     # create file again to test
     m = Moleskin(file="./test-logs/logs/test_output.log")
+    m.pprint('test')  # pprint uses `stream` key argument instead.
 
     # create file again to test
     m = Moleskin(file="./test-logs/logs/logs/test_output.log")
@@ -68,4 +69,3 @@ def test_diff():
     diff = file.read()
     M.print(diff)
     shutil.rmtree("./test-logs")
-
