@@ -69,3 +69,11 @@ def test_diff():
     diff = file.read()
     M.print(diff)
     shutil.rmtree("./test-logs")
+
+
+def test_singleton_config():
+    from .moleskin import M
+
+    M.config(file="./test-logs/test.log")
+    M.print('something')
+    shutil.rmtree("./test-logs")

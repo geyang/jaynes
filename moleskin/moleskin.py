@@ -9,7 +9,7 @@ from termcolor import cprint as _cprint
 
 
 class Moleskin:
-    def __init__(self, debug=True, file=None):
+    def __init__(self, *, debug=True, file=None):
         self.is_debug = debug
         self.log_file = None
         self.log_directory = None
@@ -23,6 +23,8 @@ class Moleskin:
             self.log_directory = os.path.realpath(directory)
 
         self.tic = None
+
+    config = __init__
 
     ## Timing Functions
     def timeit(self, fn):
@@ -181,3 +183,6 @@ class Moleskin:
             subprocess.check_call(cmd, shell=True)  # Save git diff to experiment directory
         except subprocess.CalledProcessError as e:
             self.warn("configure_output_dir: not storing the git diff due to {}".format(e))
+
+
+M = Moleskin()
