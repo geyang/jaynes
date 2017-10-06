@@ -1,1 +1,1 @@
-from .moleskin import Moleskin
+from .moleskin import Moleskin, moleskin

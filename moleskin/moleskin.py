@@ -185,4 +185,4 @@ class Moleskin:
             self.warn("configure_output_dir: not storing the git diff due to {}".format(e))
 
 
-M = Moleskin()
+moleskin = Moleskin()

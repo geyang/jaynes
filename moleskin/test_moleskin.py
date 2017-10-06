@@ -72,7 +72,7 @@ def test_diff():
 
 
 def test_singleton_config():
-    from .moleskin import M
+    from .moleskin import moleskin as M
 
     M.config(file="./test-logs/test.log")
     M.print('something')
