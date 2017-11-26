@@ -2,6 +2,8 @@ import os
 import sys
 import time
 import traceback
+from collections import defaultdict
+
 from boltons.funcutils import wraps
 from pprint import pprint
 import subprocess
@@ -22,7 +24,7 @@ class Moleskin:
             self.log_file = file
             self.log_directory = os.path.realpath(directory)
 
-        self.tic = None
+        self.tics = defaultdict(lambda: None)
 
     config = __init__
 
@@ -32,30 +34,39 @@ class Moleskin:
 
         @wraps(fn)
         def _time(*args, **kwargs):
-            self.start()
+            self.start(fn.__name__)
             results = fn(*args, **kwargs)
-            self.split()
+            self.split(fn.__name__)
             return results
 
         return _time
 
-    def start(self, silent=True):
+    def tic(self, key='default', silent=True):
         # todo: add named timers like start('name')
-        self.tic = time.time()
+        tic = time.time()
+        self.tics[key] = tic
         if not silent:
-            self.green('Timer Started')
+            self.green(f'{key} timer started')
+        return tic
 
-    def split(self, debug=False, time_format=":.4f"):
-        if self.tic is None:
+    def toc(self, key='default', silent=False, time_format=":.4f", __is_split=False):
+        tic = self.tics[key]
+        if tic is None:
             raise Exception('Need to start the timer first.')
         toc = time.time()
-        if debug:
-            # todo: Not used, not tested
-            self.debug("Split Time {}s".format(toc - self.tic))
-        else:
-            self.print("Lap Time:", end=' ')
-            self.green(("{" + time_format + "}s").format(toc - self.tic))
-        self.tic = toc
+        delta = toc - tic
+        if not silent:
+            self.print(f"{key} lap time:", end=' ')
+            self.green(("{" + time_format + "}s").format(delta))
+        if __is_split:
+            self.tics[key] = toc
+        return delta
+
+    def start(self, key='default', silent=True):
+        return self.tic(key, silent)
+
+    def split(self, key='default', silent=False, time_format=":.4f"):
+        return self.toc(key, silent, time_format, _Moleskin__is_split=True)
 
     def p(self, *args, **kwargs):
         self.print(*args, **kwargs)
@@ -177,7 +188,7 @@ class Moleskin:
         if log_directory is None:
             log_directory = os.path.realpath(self.log_directory)
         try:
-            cmd = "cd {} && git diff > {} 2>/dev/null" \
+            cmd = "cd \"{}\" && git add . && git diff > \"{}\" 2>/dev/null" \
                 .format(os.path.realpath(diff_directory),
                         os.path.join(log_directory, diff_filename))
             subprocess.check_call(cmd, shell=True)  # Save git diff to experiment directory

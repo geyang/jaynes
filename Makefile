@@ -13,4 +13,4 @@ publish:
 	make wheel
 	twine upload dist/*
 test:
-	python -m pytest .
+	python -m pytest . -s

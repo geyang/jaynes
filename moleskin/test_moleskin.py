@@ -49,15 +49,22 @@ def test_file_output():
 
 
 def test_timing():
+    import time
     M = Moleskin()
 
     @M.timeit
     def slow(n=100):
-        import time
         for i in range(n):
             time.sleep(0.01)
 
     slow(10)
+
+    M.tic('sampling')
+    time.sleep(0.01)
+    M.toc('sampling')
+    M.tic('training')
+    time.sleep(0.01)
+    M.toc('training')
 
 
 def test_diff():
