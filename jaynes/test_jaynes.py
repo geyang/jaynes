@@ -1,14 +1,14 @@
-from .moleskin import Moleskin
+from .jaynes import Jaynes
 import shutil
 
 
 def test():
-    moleskin = Moleskin()
-    moleskin.p('')
+    jaynes = Jaynes()
+    jaynes.p('')
 
-    moleskin.p('red', [0, 1])
-    moleskin.red('red', [0, 1])
-    moleskin.pprint([0, 1])
+    jaynes.p('red', [0, 1])
+    jaynes.red('red', [0, 1])
+    jaynes.pprint([0, 1])
 
 
 def test_file_output():
@@ -18,7 +18,7 @@ def test_file_output():
     except:
         pass
 
-    m = Moleskin(file="./test-logs/test_output.log")
+    m = Jaynes(file="./test-logs/test_output.log")
     m.debug('this line')
 
     m.start()
@@ -26,14 +26,14 @@ def test_file_output():
     m.split()
 
     # create file again to test
-    m = Moleskin(file="./test-logs/logs/test_output.log")
+    m = Jaynes(file="./test-logs/logs/test_output.log")
     m.pprint('test')  # pprint uses `stream` key argument instead.
 
     # create file again to test
-    m = Moleskin(file="./test-logs/logs/logs/test_output.log")
+    m = Jaynes(file="./test-logs/logs/logs/test_output.log")
 
     # create file again to test
-    m = Moleskin(file="./test-logs/logs/logs/test_output.log")
+    m = Jaynes(file="./test-logs/logs/logs/test_output.log")
 
     m.p('is this working?')
     m.green('This should be working!')
@@ -50,7 +50,7 @@ def test_file_output():
 
 def test_timing():
     import time
-    M = Moleskin()
+    M = Jaynes()
 
     @M.timeit
     def slow(n=100):
@@ -68,7 +68,7 @@ def test_timing():
 
 
 def test_diff():
-    M = Moleskin(file='./test-logs/diff_log.log')
+    M = Jaynes(file='./test-logs/diff_log.log')
 
     M.diff('.')
 
@@ -79,7 +79,7 @@ def test_diff():
 
 
 def test_singleton_config():
-    from .moleskin import moleskin as M
+    from .jaynes import jaynes as M
 
     M.config(file="./test-logs/test.log")
     M.print('something')

@@ -10,7 +10,7 @@ import subprocess
 from termcolor import cprint as _cprint
 
 
-class Moleskin:
+class Jaynes:
     def __init__(self, *, debug=True, file=None):
         self.is_debug = debug
         self.log_file = None
@@ -66,7 +66,7 @@ class Moleskin:
         return self.tic(key, silent)
 
     def split(self, key='default', silent=False, time_format=":.4f"):
-        return self.toc(key, silent, time_format, _Moleskin__is_split=True)
+        return self.toc(key, silent, time_format, _Jaynes__is_split=True)
 
     def p(self, *args, **kwargs):
         self.print(*args, **kwargs)
@@ -196,4 +196,4 @@ class Moleskin:
             self.warn("configure_output_dir: not storing the git diff due to {}".format(e))
 
 
-moleskin = Moleskin()
+jaynes = Jaynes()
