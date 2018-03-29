@@ -13,7 +13,7 @@
 pip install jaynes
 ```
 
-## Usage (**Show me the Mo-NAY!!:money:**)
+## Usage (**Show me the Mo-NAY!! :moneybag::money_with_wings:**)
 
 ```python
 from jaynes import Jaynes
