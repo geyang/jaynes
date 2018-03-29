@@ -1,4 +1,4 @@
-# Jaynes, A Logging Utility for Python Debugging
+# Jaynes, A Utility for running script on AWS with docker
 <a href="figures/ETJaynes_defiant.jpg" target="_blank"><img src="figures/ETJaynes_defiant.jpg" alt="Defiant Jaynes" align="right" width="350px"></a>
 ## Todo
 
