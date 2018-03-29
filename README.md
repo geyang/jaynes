@@ -1,5 +1,5 @@
 # Jaynes, A Logging Utility for Python Debugging
-<a href="figures/ETJaynes_defiant.jpg" target="_blank"><img src="figures/star%20nosed%20mole.jpg" alt="star nose mole" align="right" width="350px"></a>
+<a href="figures/ETJaynes_defiant.jpg" target="_blank"><img src="figures/ETJaynes_defiant.jpg" alt="Defiant Jaynes" align="right" width="350px"></a>
 ## Todo
 
 - [ ] get the initial template to work
