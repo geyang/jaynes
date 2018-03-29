@@ -2,17 +2,10 @@
 <a href="figures/star%20nosed%20mole.jpg" target="_blank"><img src="figures/star%20nosed%20mole.jpg" alt="star nose mole" align="right" width="350px"></a>
 ## Todo
 
-- [ ] Write examples and justify `jaynes`'s existence
-- [ ] add pretty pictures of a `mole` and with a notebook.
+- [ ] get the initial template to work
 
 ### Done
 
-- [x] rename `ledger` to `jaynes`! because I couldn't get the names:
-    - `ledger`: because somebody took it.
-    - `parchment`: because somebody took it (>.<)
-    - `vellum`: they took the calf version too (o_O )
-    
-    So I decided on `jaynes`! The paper just gets softer :)
     
 ## Installation
 
@@ -20,37 +13,19 @@
 pip install jaynes
 ```
 
-## Usage
+## Usage (**Show me the Mo-NAY!!:money:**)
 
 ```python
 from jaynes import Jaynes
 
-M = Jaynes()
-
-M.log('this is a log entry!')
-
-# Jaynes gives really nice debug traces:
-some_variable = "test"
-M.debug(some_variable)
-
-
-# Jaynes can also be used as a code timer:
-import time
-M.start(silent=True)
-time.sleep(3.0)
-M.split()
-# Lap Time: 3.0084s
+J = Jaynes()  # where you add aws configurations
+J.call(fn, {some, data})
 ```
 
-You can even log to a file!
+Jaynes does the following:
 
-```python
-from jaynes import Jaynes
+1. 
 
-jaynes = Jaynes(file="./a_log_file.log")
-jaynes.log('this is a log entry!')
-# and it prints to both std out *and* the log file!
-```
 
 ## To Develop
 
