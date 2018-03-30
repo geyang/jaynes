@@ -10,7 +10,7 @@ def test():
 
     thunk_string = serialize(fn, [3])
     cmd = f"{JAYNES_PARAMS_KEY}={thunk_string} python -m jaynes.entry"
-    ck(cmd, shell=True)
+    ck(cmd, verbose=True, shell=True)
 
 
 if __name__ == "__main__":

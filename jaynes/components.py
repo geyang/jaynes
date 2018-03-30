@@ -18,9 +18,10 @@ def s3_mount(bucket, prefix, local, remote=None, docker=None, pypath=False, file
     abs_docker = os.path.abspath(docker)
     local_script = f"""
             pwd &&
-            mkdir -p {temp_dir}  && 
+            mkdir -p {temp_dir}
             # Do not use absolute path in tar.
             tar czf {temp_path} -C "{abs_local}" {file_mask}
+            echo "uploading to s3"
             aws s3 cp {temp_path} s3://{bucket}/{prefix}/{temp_filename} 
             """
     remote_tar = f"/tmp/{temp_filename}"

@@ -2,11 +2,10 @@
 <a href="figures/ETJaynes_defiant.jpg" target="_blank"><img src="figures/ETJaynes_defiant.jpg" alt="Defiant Jaynes" align="right" width="350px"></a>
 ## Todo
 
-- [ ] get the initial template to work
+- [x] get the initial template to work
 
 ### Done
 
-    
 ## Installation
 
 ```bash
@@ -14,6 +13,9 @@ pip install jaynes
 ```
 
 ## Usage (**Show me the Mo-NAY!! :moneybag::money_with_wings:**)
+
+Take a look at the folder [test_projects/](test_projects/)! These project scripts are used for test and development, so
+they should work out-of-the-box (if you have the right box ahem). 
 
 ### To run Local Docker
 

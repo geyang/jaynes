@@ -12,5 +12,5 @@ def train(log_dir, *args, **kwargs):
             f.flush()
 
 
-LOG_DIR = "dqn/some_experiment-1"
+LOG_DIR = "jaynes-test-project-log"
 abs_path = os.path.abspath(LOG_DIR)

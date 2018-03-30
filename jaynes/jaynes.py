@@ -1,5 +1,6 @@
 import base64
 import os
+from textwrap import dedent
 
 from .components import s3_mount, output_mount, docker_run
 from .param_codec import serialize
@@ -89,17 +90,17 @@ class Jaynes:
     def start_ec2(self):
         pass
 
-    def make_launch_script(self, fn, *args, terminate_after_finish=False, **kwargs):
-        tag_current_instance = """
+    def make_launch_script(self, fn, *args, verbose=False, no_sudo=False, terminate_after_finish=False, **kwargs):
+        tag_current_instance = f"""
             EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
-            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value=infogan-rope-2018-03-28-10-18-16-000 --region us-west-2
-            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=exp_prefix,Value=infogan-rope --region us-west-2
+            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={self.prefix} --region us-west-2
+            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=exp_prefix,Value={self.prefix} --region us-west-2
         """
-        install_aws_cli = """
+        install_aws_cli = f"""
             curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
             yes A | unzip awscli-bundle.zip
             echo "finished unziping the awscli bundle"
-            sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
+            {"" if no_sudo else "sudo "}./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
             echo "aws cli is installed"
         """
         termination_script = f"""
@@ -129,7 +130,7 @@ class Jaynes:
             
             {self.remote_setup}
             
-            # sudo service docker start
+            # {"" if no_sudo else "sudo "}service docker start
             # pull docker
             docker pull {self.docker_image}
             
@@ -138,11 +139,15 @@ class Jaynes:
             {termination_script if terminate_after_finish else ""}
         }} >> {abs_log}
         """
+
+        launch_script = dedent(launch_script).strip()
         with open(launch_script_path, 'w+') as f:
             f.write(launch_script)
 
         self.launch_script = launch_script
         self.launch_script_path = launch_script_path
+        if verbose:
+            print(self.launch_script)
         return self
 
     def launch_and_run(self, region, image_id, instance_type, key_name, security_group,
@@ -162,4 +167,7 @@ class Jaynes:
             spot_request_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
             return spot_request_id
         else:
-            ec2.create_instances(MaxCount=1, MinCount=1, **instance_config, DryRun=dry)
+            response = ec2.create_instances(MaxCount=1, MinCount=1, **instance_config, DryRun=dry)
+
+        if verbose:
+            print(response)
