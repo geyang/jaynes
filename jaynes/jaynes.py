@@ -1,199 +1,165 @@
+import base64
 import os
-import sys
-import time
-import traceback
-from collections import defaultdict
 
-from boltons.funcutils import wraps
-from pprint import pprint
-import subprocess
-from termcolor import cprint as _cprint
+from .components import s3_mount, output_mount, docker_run
+from .param_codec import serialize
+from .shell import ck
 
 
 class Jaynes:
-    def __init__(self, *, debug=True, file=None):
-        self.is_debug = debug
-        self.log_file = None
-        self.log_directory = None
-        if file:
-            directory, filename = os.path.split(file)
-            try:
-                os.makedirs(directory)
-            except FileExistsError:
-                pass
-            self.log_file = file
-            self.log_directory = os.path.realpath(directory)
-
-        self.tics = defaultdict(lambda: None)
+    def __init__(self, remote_cwd, bucket, prefix="jaynes", log=None):
+        self.bucket = bucket
+        self.prefix = prefix
+        self.remote_cwd = remote_cwd
+        self.main_log = log
+        self.pypath = ""
+        self.local_setup = ""
+        self.upload_script = ""
+        self.remote_setup = ""
+        self.docker_mount = ""
 
     config = __init__
 
-    ## Timing Functions
-    def timeit(self, fn):
-        """A timing decorator, preserves function metadata."""
+    def mount_s3(self, **kwargs):
+        local_script, remote_script, docker_mount, _pypath = s3_mount(self.bucket, self.prefix, **kwargs)
+        if _pypath:
+            self.pypath += ":" + _pypath
+        self.local_setup += local_script
+        self.remote_setup += remote_script
+        self.docker_mount += " " + docker_mount
+        return self
 
-        @wraps(fn)
-        def _time(*args, **kwargs):
-            self.start(fn.__name__)
-            results = fn(*args, **kwargs)
-            self.split(fn.__name__)
-            return results
-
-        return _time
-
-    def tic(self, key='default', silent=True):
-        # todo: add named timers like start('name')
-        tic = time.time()
-        self.tics[key] = tic
-        if not silent:
-            self.green(f'{key} timer started')
-        return tic
-
-    def toc(self, key='default', silent=False, time_format=":.4f", __is_split=False):
-        tic = self.tics[key]
-        if tic is None:
-            raise Exception('Need to start the timer first.')
-        toc = time.time()
-        delta = toc - tic
-        if not silent:
-            self.print(f"{key} lap time:", end=' ')
-            self.green(("{" + time_format + "}s").format(delta))
-        if __is_split:
-            self.tics[key] = toc
-        return delta
-
-    def start(self, key='default', silent=True):
-        return self.tic(key, silent)
-
-    def split(self, key='default', silent=False, time_format=":.4f"):
-        return self.toc(key, silent, time_format, _Jaynes__is_split=True)
-
-    def p(self, *args, **kwargs):
-        self.print(*args, **kwargs)
-
-    def print(self, *args, **kwargs):
-        """use stdout.flush to allow streaming to file when used by IPython. IPython doesn't have -u option."""
-        if self.log_file and 'file' not in kwargs:
-            with open(self.log_file, 'a+') as logfile:
-                print(*args, **kwargs, file=logfile)
-        print(*args, **kwargs)
-        sys.stdout.flush()
-
-    def cp(self, *args, **kwargs):
-        self.cprint(*args, **kwargs)
-
-    def cprint(self, *args, sep=' ', color='white', **kwargs):
-        """use stdout.flush to allow streaming to file when used by IPython. IPython doesn't have -u option."""
-        if self.log_file and 'file' not in kwargs:
-            with open(self.log_file, 'a+') as logfile:
-                _cprint(sep.join([str(a) for a in args]), color, **kwargs, file=logfile)
-        _cprint(sep.join([str(a) for a in args]), color, **kwargs)
-        sys.stdout.flush()
-
-    def pp(self, *args, **kwargs):
-        self.pprint(*args, **kwargs)
-
-    def pprint(self, *args, **kwargs):
-        if self.log_file and 'file' not in kwargs:
-            with open(self.log_file, 'a+') as logfile:
-                pprint(*args, **kwargs, stream=logfile)
-        pprint(*args, **kwargs)
-        sys.stdout.flush()
-
-    def log(self, *args, **kwargs):
-        """use stdout.flush to allow streaming to file when used by IPython. IPython doesn't have -u option."""
-        self.print(*args, **kwargs)
-
-    # TODO: take a look at https://gist.github.com/FredLoney/5454553
-    def debug(self, *args, **kwargs):
-        # DONE: current call stack instead of last traceback instead of.
-        if self.is_debug:
-            stacks = traceback.extract_stack()
-            last_caller = stacks[-2]
-            path = last_caller.filename.split('/')
-            if len(path) >= 2:
-                self.white(path[-2], end='/')
-            if len(path) >= 1:
-                self.green(path[-1], end=' ')
-            self.white('L', end='')
-            self.red('{}'.format(last_caller.lineno), end='')
-            self.print(': ', end='')
-            self.print(last_caller.line)
-            self.print(*args, **kwargs)
-
-    def refresh(self, *args, **kwargs):
-        """allow keyword override of end='\r', so that only last print refreshes the console."""
-        # to prevent from creating new line
-        # default new end to single space.
-        if 'end' not in kwargs:
-            kwargs['end'] = ' '
-        self.print('\r', *args, **kwargs)
-
-    def info(self, *args, **kwargs):
-        self.cprint(*args, color='blue', **kwargs)
-
-    def error(self, *args, sep='', **kwargs):
-        self.cprint(*args, color='red', **kwargs)
-
-    def warn(self, *args, **kwargs):
-        self.cprint(*args, color='yellow', **kwargs)
-
-    def highlight(self, *args, **kwargs):
-        self.cprint(*args, color='green', **kwargs)
-
-    def green(self, *args, **kwargs):
-        self.cprint(*args, color='green', **kwargs)
-
-    def grey(self, *args, **kwargs):
-        self.cprint(*args, color='grey', **kwargs)
-
-    def gray(self, *args, **kwargs):
-        self.grey(*args, **kwargs)
-
-    def red(self, *args, **kwargs):
-        self.cprint(*args, color='red', **kwargs)
-
-    def yellow(self, *args, **kwargs):
-        self.cprint(*args, color='yellow', **kwargs)
-
-    def blue(self, *args, **kwargs):
-        self.cprint(*args, color='blue', **kwargs)
-
-    def magenta(self, *args, **kwargs):
-        self.cprint(*args, color='magenta', **kwargs)
-
-    def cyan(self, *args, **kwargs):
-        self.cprint(*args, color='cyan', **kwargs)
-
-    def white(self, *args, **kwargs):
-        self.cprint(*args, color='white', **kwargs)
-
-    # def assert(self, statement, warning):
-    #     if not statement:
-    #         self.error(warning)
-    #
-
-    def raise_(self, exception, *args, **kwargs):
-        self.error(*args, **kwargs)
-        raise exception
-
-    def diff(self, diff_directory=".", log_directory=None, diff_filename="index.diff"):
+    def mount_output(self, **kwargs):
         """
-        example usage: M.diff('.')
-        :param diff_directory: The root directory to call `git diff`.
-        :param log_directory: The overriding log directory to save this diff index file
-        :param diff_filename: The filename for the diff file.
-        :return: None
+        > `s3_dir` is prefixed with bucket name and prefix.
         """
-        if log_directory is None:
-            log_directory = os.path.realpath(self.log_directory)
-        try:
-            cmd = "cd \"{}\" && git add . && git diff > \"{}\" 2>/dev/null" \
-                .format(os.path.realpath(diff_directory),
-                        os.path.join(log_directory, diff_filename))
-            subprocess.check_call(cmd, shell=True)  # Save git diff to experiment directory
-        except subprocess.CalledProcessError as e:
-            self.warn("configure_output_dir: not storing the git diff due to {}".format(e))
+        local_script, remote_script, docker_mount, upload, _pypath = \
+            output_mount(remote_cwd=self.remote_cwd, bucket=self.bucket, prefix=self.prefix, **kwargs)
+        if _pypath:
+            self.pypath += ":" + _pypath
+        self.local_setup += local_script
+        self.upload_script += upload
+        self.remote_setup += remote_script
+        self.docker_mount += " " + docker_mount
+        return self
 
+    def setup_docker_run(self, docker_image, docker_startup_scripts=None, use_gpu=False):
+        self.docker_image = docker_image
+        self.use_gpu = use_gpu
+        self.docker_startup_scripts = docker_startup_scripts
+        return self
 
-jaynes = Jaynes()
+    def run_local(self, verbose=False, dry=False):
+        cmd = f"""{self.local_setup}"""
+        if dry:
+            return cmd
+        else:
+            ck(cmd, verbose=verbose, shell=True)
+            return self
+
+    def run_local_docker(self, fn, *args, verbose=False, dry=False, **kwargs):
+        abs_log = os.path.abspath(self.main_log)
+        log_dir = os.path.dirname(abs_log)
+        encoded_thunk = serialize(fn, args, kwargs)
+        docker_command = docker_run(self.docker_image, self.pypath, self.docker_startup_scripts, os.getcwd(),
+                                    self.use_gpu).format(encoded_thunk=encoded_thunk, docker_mount=self.docker_mount)
+        remote_script = f"""
+        #!/bin/bash
+        mkdir -p {log_dir}
+        {{
+            # clear main_log
+            truncate -s 0 {abs_log}
+            
+            {self.remote_setup}
+            
+            # sudo service docker start
+            # pull docker
+            docker pull {self.docker_image}
+            {docker_command}
+            {self.upload_script}
+            
+        }} >> {self.abs_log}
+        """
+        if dry:
+            return remote_script
+        else:
+            ck(remote_script, verbose=verbose, shell=True)
+            return self
+
+    def start_ec2(self):
+        pass
+
+    def make_launch_script(self, fn, *args, terminate_after_finish=False, **kwargs):
+        tag_current_instance = """
+            EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
+            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value=infogan-rope-2018-03-28-10-18-16-000 --region us-west-2
+            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=exp_prefix,Value=infogan-rope --region us-west-2
+        """
+        install_aws_cli = """
+            curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
+            yes A | unzip awscli-bundle.zip
+            echo "finished unziping the awscli bundle"
+            sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
+            echo "aws cli is installed"
+        """
+        termination_script = f"""
+            echo "Now terminate this instance"
+            EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id || die "wget instance-id has failed: $?"`"
+            aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region us-west-2
+        """
+        # TODO: path.join is running on local computer, so it might not be quite right if remote is say windows.
+        abs_log = os.path.join(self.remote_cwd, self.main_log)
+        log_dir = os.path.dirname(abs_log)
+        encoded_thunk = serialize(fn, args, kwargs)
+        docker_command = docker_run(self.docker_image, self.pypath, self.docker_startup_scripts, os.getcwd(),
+                                    self.use_gpu).format(encoded_thunk=encoded_thunk, docker_mount=self.docker_mount)
+        launch_script_path = os.path.join(os.path.dirname(self.main_log), "jaynes_launcher.sh")
+        launch_script = f"""
+        #!/bin/bash
+        mkdir -p {log_dir}
+        {{
+            # clear main_log
+            truncate -s 0 {abs_log}
+            
+            die() {{ status=$1; shift; echo "FATAL: $*"; exit $status; }}
+            {install_aws_cli}
+            
+            export AWS_DEFAULT_REGION=us-west-1
+            {tag_current_instance}
+            
+            {self.remote_setup}
+            
+            # sudo service docker start
+            # pull docker
+            docker pull {self.docker_image}
+            
+            {self.upload_script}
+            {docker_command}
+            {termination_script if terminate_after_finish else ""}
+        }} >> {abs_log}
+        """
+        with open(launch_script_path, 'w+') as f:
+            f.write(launch_script)
+
+        self.launch_script = launch_script
+        self.launch_script_path = launch_script_path
+        return self
+
+    def launch_and_run(self, region, image_id, instance_type, key_name, security_group,
+                       is_spot_instance=True, spot_price=None, iam_instance_profile_arn=None, verbose=False,
+                       dry=False):
+        import boto3
+        ec2 = boto3.client("ec2", region_name=region, aws_access_key_id=os.environ.get('AWS_ACCESS_KEY'),
+                           aws_secret_access_key=os.environ.get('AWS_ACCESS_SECRET'))
+
+        instance_config = dict(ImageId=image_id, KeyName=key_name, InstanceType=instance_type,
+                               SecurityGroups=(security_group,),
+                               IamInstanceProfile=dict(Arn=iam_instance_profile_arn),
+                               UserData=base64.b64encode(self.launch_script.encode()).decode("utf-8"))
+        if is_spot_instance:
+            response = ec2.request_spot_instances(InstanceCount=1, LaunchSpecification=instance_config,
+                                                  SpotPrice=str(spot_price), DryRun=dry)
+            spot_request_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
+            return spot_request_id
+        else:
+            ec2.create_instances(MaxCount=1, MinCount=1, **instance_config, DryRun=dry)
