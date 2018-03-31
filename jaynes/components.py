@@ -1,5 +1,7 @@
 import os
 import tempfile
+from textwrap import dedent
+
 import uuid
 
 from jaynes.helpers import path_no_ext
@@ -120,7 +122,7 @@ def docker_run(docker_image, pypath="", docker_startup_scripts=None, cwd=None, u
     return run_script
 
 
-def ssh_remote_exec(user, ip_address, pem=None, script=None, sudo=True):
+def ssh_remote_exec(user, ip_address, script, log_dir, pem=None, sudo=True):
     """
     run script remotely via ssh agent
     :param user:
@@ -133,11 +135,15 @@ def ssh_remote_exec(user, ip_address, pem=None, script=None, sudo=True):
     # cmd = f"""plink root@MachineB -m local_script.sh"""  # windows
     if sudo:
         # cmd = f"""ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem} ' if pem else ''}'echo \"rootpass\" | sudo -Sv && bash -s' < {script}"""
-        # solution fround: https://stackoverflow.com/questions/44916319/how-to-sudo-run-a-local-script-over-ssh
-        filename = os.path.basename(script)
+        # solution found: https://stackoverflow.com/questions/44916319/how-to-sudo-run-a-local-script-over-ssh
+        # log_dir = log_dir or script
+        # remote_directory = os.path.dirname(log_dir)
+        assert os.path.isabs(log_dir), "log_dir need to be absolute"
+        remote_path = os.path.join(log_dir, os.path.basename(script))
         cmd = f"""
-            scp {f'-i {pem}' if pem else ''} {script} {user}@{ip_address}:/tmp/
-            ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem}' if pem else ''} 'sudo -n -s bash /tmp/{filename}'"""
+            ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem}' if pem else ''} 'mkdir -p {log_dir}'
+            scp {f'-i {pem}' if pem else ''} {script} {user}@{ip_address}:{log_dir}
+            ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem}' if pem else ''} 'sudo -n -s bash {remote_path}'"""
     else:
-        cmd = f"""ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem} ' if pem else ''}'bash -s' < {script}"""
-    return cmd
+        cmd = f"""ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem}' if pem else ''} 'bash -s' < {script}"""
+    return dedent(cmd)

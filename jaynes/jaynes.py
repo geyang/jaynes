@@ -1,5 +1,8 @@
 import base64
 import os
+import tempfile
+
+import uuid
 from textwrap import dedent
 
 from .components import s3_mount, output_mount, docker_run, ssh_remote_exec
@@ -98,7 +101,6 @@ class Jaynes:
             ck(remote_script, verbose=verbose, shell=True)
             return self
 
-
     def make_launch_script(self, fn, *args, verbose=False, sudo=False, terminate_after_finish=False, **kwargs):
         tag_current_instance = f"""
             EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
@@ -123,7 +125,6 @@ class Jaynes:
         encoded_thunk = serialize(fn, args, kwargs)
         docker_command = docker_run(self.docker_image, self.pypath, self.docker_startup_scripts, os.getcwd(),
                                     self.use_gpu).format(encoded_thunk=encoded_thunk, docker_mount=self.docker_mount)
-        launch_script_path = os.path.join(os.path.dirname(self.main_log), "jaynes_launcher.sh")
         launch_script = f"""
         #!/bin/bash
         mkdir -p {log_dir}
@@ -145,16 +146,13 @@ class Jaynes:
             
             {self.upload_script}
             {docker_command}
+                        
             {termination_script if terminate_after_finish else ""}
         }} >> {abs_log}
         """
 
         launch_script = dedent(launch_script).strip()
-        with open(launch_script_path, 'w+') as f:
-            f.write(launch_script)
-
         self.launch_script = launch_script
-        self.launch_script_path = launch_script_path
         if verbose:
             print(self.launch_script)
         return self
@@ -168,12 +166,19 @@ class Jaynes:
         :param dry:
         :return:
         """
-        cmd = ssh_remote_exec("ubuntu", ip_address, pem=pem, script=self.launch_script_path)
-        if dry:
-            print(cmd)
-        else:
-            ck(cmd, verbose=verbose, shell=True)
+        log_dir = os.path.dirname(self.main_log)
+        with tempfile.NamedTemporaryFile('w+', prefix="jaynes_launcher-", suffix=".sh") as tf:
+            launch_script_path = tf.name
+            script_name = os.path.basename(tf.name)
+            tf.write(self.launch_script + "\n"
+                                         f"kill $(ps aux | grep '{script_name}' | awk '{{print $2}}')\n"
+                                         f"echo 'clean up all startup script processes'\n")
 
+            cmd = ssh_remote_exec("ubuntu", ip_address, launch_script_path, log_dir, pem=pem, sudo=True)
+            if dry:
+                print(cmd)
+            else:
+                ck(cmd, verbose=verbose, shell=True)
 
     def launch_and_run(self, region, image_id, instance_type, key_name, security_group,
                        spot_price=None, iam_instance_profile_arn=None, verbose=False,
