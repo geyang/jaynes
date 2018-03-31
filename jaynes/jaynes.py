@@ -2,7 +2,7 @@ import base64
 import os
 from textwrap import dedent
 
-from .components import s3_mount, output_mount, docker_run
+from .components import s3_mount, output_mount, docker_run, ssh_remote_exec
 from .param_codec import serialize
 from .shell import ck
 
@@ -87,10 +87,8 @@ class Jaynes:
             ck(remote_script, verbose=verbose, shell=True)
             return self
 
-    def start_ec2(self):
-        pass
 
-    def make_launch_script(self, fn, *args, verbose=False, no_sudo=False, terminate_after_finish=False, **kwargs):
+    def make_launch_script(self, fn, *args, verbose=False, sudo=False, terminate_after_finish=False, **kwargs):
         tag_current_instance = f"""
             EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
             aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={self.prefix} --region us-west-2
@@ -100,7 +98,7 @@ class Jaynes:
             curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
             yes A | unzip awscli-bundle.zip
             echo "finished unziping the awscli bundle"
-            {"" if no_sudo else "sudo "}./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
+            {"sudo " if sudo else ""}./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
             echo "aws cli is installed"
         """
         termination_script = f"""
@@ -130,7 +128,7 @@ class Jaynes:
             
             {self.remote_setup}
             
-            # {"" if no_sudo else "sudo "}service docker start
+            # {"sudo " if sudo else ""}service docker start
             # pull docker
             docker pull {self.docker_image}
             
@@ -150,8 +148,18 @@ class Jaynes:
             print(self.launch_script)
         return self
 
+    def run_ssh_remote(self, ip_address, pem, verbose=False, dry=False):
+        # with TemporaryFile("w+", suffix=".sh") as f:
+        #     f.write(self.launch_script)
+        cmd = ssh_remote_exec("ubuntu", ip_address, pem, self.launch_script_path)
+        if dry:
+            print(cmd)
+        else:
+            ck(cmd, verbose=verbose, shell=True)
+
+
     def launch_and_run(self, region, image_id, instance_type, key_name, security_group,
-                       is_spot_instance=True, spot_price=None, iam_instance_profile_arn=None, verbose=False,
+                       spot_price=None, iam_instance_profile_arn=None, verbose=False,
                        dry=False):
         import boto3
         ec2 = boto3.client("ec2", region_name=region, aws_access_key_id=os.environ.get('AWS_ACCESS_KEY'),
@@ -161,13 +169,14 @@ class Jaynes:
                                SecurityGroups=(security_group,),
                                IamInstanceProfile=dict(Arn=iam_instance_profile_arn),
                                UserData=base64.b64encode(self.launch_script.encode()).decode("utf-8"))
-        if is_spot_instance:
+        if spot_price:
+            # for detailed settings see: http://boto3.readthedocs.io/en/latest/reference/services/ec2.html#EC2.Client.request_spot_instances
             response = ec2.request_spot_instances(InstanceCount=1, LaunchSpecification=instance_config,
                                                   SpotPrice=str(spot_price), DryRun=dry)
             spot_request_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
+            print(response)
             return spot_request_id
         else:
-            response = ec2.create_instances(MaxCount=1, MinCount=1, **instance_config, DryRun=dry)
-
-        if verbose:
+            response = ec2.run_instances(MaxCount=1, MinCount=1, **instance_config, DryRun=dry)
             print(response)
+            return response

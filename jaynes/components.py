@@ -98,3 +98,17 @@ def docker_run(docker_image, pypath="", docker_startup_scripts=None, cwd=None, u
             {docker_image} /bin/bash -c '{cmd}'
             """
     return run_script
+
+
+def ssh_remote_exec(user, ip_address, pem=None, script=None, sudo=True):
+    # cmd = f"""plink root@MachineB -m local_script.sh"""  # windows
+    if sudo:
+        # cmd = f"""ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem} ' if pem else ''}'echo \"rootpass\" | sudo -Sv && bash -s' < {script}"""
+        # solution fround: https://stackoverflow.com/questions/44916319/how-to-sudo-run-a-local-script-over-ssh
+        filename = os.path.basename(script)
+        cmd = f"""
+            scp {f'-i {pem}' if pem else ''} {script} {user}@{ip_address}:/tmp/
+            ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem}' if pem else ''} 'sudo -n -s bash /tmp/{filename}'"""
+    else:
+        cmd = f"""ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem} ' if pem else ''}'bash -s' < {script}"""
+    return cmd
