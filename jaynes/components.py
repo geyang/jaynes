@@ -34,22 +34,42 @@ def s3_mount(bucket, prefix, local, remote=None, docker=None, pypath=False, file
     return local_script, remote_script, docker_mount, abs_docker if pypath else None
 
 
-def output_mount(remote_cwd, bucket, prefix, s3_dir, local, remote=None, docker=None, interval=15, pypath=False,
-                 sync_s3=False):
+def output_mount(remote_cwd, bucket, prefix, s3_dir, local=None, remote=None, docker=None, interval=15, pypath=False,
+                 sync_s3=True):
+    """
+    s3 path syntax:
+                s3://{bucket}/{prefix}/{s3_dir}
+    local path syntax:
+                file://{local}
+    remote path syntax:
+                ssh://<remote>:{remote if isabs(remote) else remote_cwd + remote}
+            note that the remote path is made absolute using the remote_cwd parameter
+    :param remote_cwd:
+    :param bucket:
+    :param prefix:
+    :param s3_dir:
+    :param local:
+    :param remote:
+    :param docker:
+    :param interval:
+    :param pypath:
+    :param sync_s3:
+    :return:
+    """
     remote = remote or local
     abs_remote = remote if os.path.isabs(remote) else os.path.join(remote_cwd, remote)
     assert os.path.isabs(abs_remote), "ATTENTION: remote_cwd + remote has to be an absolute path."
     assert os.path.isabs(docker), \
         "ATTENTION: docker path has to be absolute, to make sure your code knows where it is writing to."
-    download_script = f"""
+    download_script = "" if local is None else f"""
                 aws s3 cp --recursive s3://{bucket}/{prefix}/{s3_dir} {local} || echo "s3 bucket is EMPTY" """
-    local_script = f"""
-            mkdir -p {local}""" + ("" if not sync_s3 else f"""
+    local_script = "" if local is None else f"""
+            mkdir -p {local}
             while true; do
                 echo "downloading..." {download_script}
                 sleep {interval}
-            done & echo "sync {remote} initiated"
-    """)
+            done & echo "sync {local} initiated"
+    """
     upload_script = f"""
                 aws s3 cp --recursive {abs_remote} s3://{bucket}/{prefix}/{s3_dir} """
     remote_script = f"""
@@ -101,6 +121,15 @@ def docker_run(docker_image, pypath="", docker_startup_scripts=None, cwd=None, u
 
 
 def ssh_remote_exec(user, ip_address, pem=None, script=None, sudo=True):
+    """
+    run script remotely via ssh agent
+    :param user:
+    :param ip_address:
+    :param pem:
+    :param script:
+    :param sudo:
+    :return:
+    """
     # cmd = f"""plink root@MachineB -m local_script.sh"""  # windows
     if sudo:
         # cmd = f"""ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem} ' if pem else ''}'echo \"rootpass\" | sudo -Sv && bash -s' < {script}"""

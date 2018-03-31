@@ -21,17 +21,35 @@ mkdir -p /home/ubuntu/new-test-hahaha
 
 
 
-    aws s3 cp s3://ge-bair/jaynes-ssh-exec-test/tmpdnv5tdkc.tar /tmp/tmpdnv5tdkc.tar
-    mkdir -p /tmp/tmpdnv5tdkc
-    tar -zxf /tmp/tmpdnv5tdkc.tar -C /tmp/tmpdnv5tdkc
+    aws s3 cp s3://ge-bair/jaynes-ssh-exec-test/tmpimiv1g5a.tar /tmp/tmpimiv1g5a.tar
+    mkdir -p /tmp/tmpimiv1g5a
+    tar -zxf /tmp/tmpimiv1g5a.tar -C /tmp/tmpimiv1g5a
 
-    aws s3 cp s3://ge-bair/jaynes-ssh-exec-test/tmpeghhceum.tar /tmp/tmpeghhceum.tar
-    mkdir -p /tmp/tmpeghhceum
-    tar -zxf /tmp/tmpeghhceum.tar -C /tmp/tmpeghhceum
+    aws s3 cp s3://ge-bair/jaynes-ssh-exec-test/tmp_suuk09z.tar /tmp/tmp_suuk09z.tar
+    mkdir -p /tmp/tmp_suuk09z
+    tar -zxf /tmp/tmp_suuk09z.tar -C /tmp/tmp_suuk09z
 
     echo "making main_log directory /home/ubuntu/new-test-hahaha"
     mkdir -p /home/ubuntu/new-test-hahaha
     echo "made main_log directory" 
+    while true; do
+        echo "uploading..." 
+        aws s3 cp --recursive /home/ubuntu/new-test-hahaha s3://ge-bair/jaynes-ssh-exec-test/new-test-hahaha 
+        sleep 15
+    done & echo "sync /home/ubuntu/new-test-hahaha initiated" 
+    while true; do
+        if [ -z $(curl -Is http://169.254.169.254/latest/meta-data/spot/termination-time | head -1 | grep 404 | cut -d \  -f 2) ]
+        then
+            logger "Running shutdown hook." 
+        aws s3 cp --recursive /home/ubuntu/new-test-hahaha s3://ge-bair/jaynes-ssh-exec-test/new-test-hahaha 
+            break
+        else
+            # Spot instance not yet marked for termination. This is hoping that there's at least 3 seconds
+            # between when the spot instance gets marked for termination and when it actually terminates.
+            sleep 3
+        fi
+    done & echo main_log sync initiated
+
 
     # sudo service docker start
     # pull docker
@@ -46,8 +64,8 @@ mkdir -p /home/ubuntu/new-test-hahaha
 
 
     echo 'Now run docker'
-    nvidia-docker run  -v '/tmp/tmpdnv5tdkc':'/tmp/tmpdnv5tdkc' -v '/tmp/tmpeghhceum':'/tmp/tmpeghhceum' -v '/home/ubuntu/new-test-hahaha':'/Users/ge/machine_learning/berkeley-playground/packages/jaynes/test_projects/proj_1/new-test-hahaha' --name 0d0a75a4-3459-4231-b6a5-9ba40b2ef5f9 \
-    thanard/matplotlib /bin/bash -c 'echo "Running in docker (gpu)";pip install cloudpickle;export PYTHONPATH=$PYTHONPATH:/tmp/tmpdnv5tdkc:/tmp/tmpeghhceum;cd '/Users/ge/machine_learning/berkeley-playground/packages/jaynes/test_projects/proj_1';JAYNES_PARAMS_KEY=gAJ9cQAoWAUAAAB0aHVua3EBY21haW4KdHJhaW4KcQJYBAAAAGFyZ3NxAylYBgAAAGt3YXJnc3EEfXEFKFgBAAAAYXEGWAMAAABoZXlxB1gBAAAAYnEIXXEJKEsASwFLAmVYBwAAAGxvZ19kaXJxClgPAAAAbmV3LXRlc3QtaGFoYWhhcQtYAwAAAGRyeXEMiHV1Lg== python -u -m jaynes.entry'
+    nvidia-docker run  -v '/tmp/tmpimiv1g5a':'/tmp/tmpimiv1g5a' -v '/tmp/tmp_suuk09z':'/tmp/tmp_suuk09z' -v '/home/ubuntu/new-test-hahaha':'/Users/ge/machine_learning/berkeley-playground/packages/jaynes/test_projects/proj_1/new-test-hahaha' --name fb4d2488-99ab-4f33-b49e-e9818e1ead2f \
+    thanard/matplotlib /bin/bash -c 'echo "Running in docker (gpu)";pip install cloudpickle;export PYTHONPATH=$PYTHONPATH:/tmp/tmpimiv1g5a:/tmp/tmp_suuk09z;cd '/Users/ge/machine_learning/berkeley-playground/packages/jaynes/test_projects/proj_1';JAYNES_PARAMS_KEY=gAJ9cQAoWAUAAAB0aHVua3EBY21haW4KdHJhaW4KcQJYBAAAAGFyZ3NxAylYBgAAAGt3YXJnc3EEfXEFKFgBAAAAYXEGWAMAAABoZXlxB1gBAAAAYnEIXXEJKEsASwFLAmVYBwAAAGxvZ19kaXJxClgPAAAAbmV3LXRlc3QtaGFoYWhhcQtYAwAAAGRyeXEMiHV1Lg== python -u -m jaynes.entry'
 
 
 } >> /home/ubuntu/new-test-hahaha/startup.log

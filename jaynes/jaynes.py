@@ -33,6 +33,17 @@ class Jaynes:
     def mount_output(self, **kwargs):
         """
         > `s3_dir` is prefixed with bucket name and prefix.
+
+        s3 path syntax:
+                    s3://{bucket}/{prefix}/{s3_dir}
+        local path syntax:
+                    file://{local}
+                note if local is None, no local folder will be created to downloaded.
+        remote path syntax:
+                    ssh://<remote>:{remote_cwd, remote}
+                note that the remote path is made absolute using the remote_cwd parameter
+        :param kwargs:
+        :return:
         """
         local_script, remote_script, docker_mount, upload, _pypath = \
             output_mount(remote_cwd=self.remote_cwd, bucket=self.bucket, prefix=self.prefix, **kwargs)
@@ -148,10 +159,16 @@ class Jaynes:
             print(self.launch_script)
         return self
 
-    def run_ssh_remote(self, ip_address, pem, verbose=False, dry=False):
-        # with TemporaryFile("w+", suffix=".sh") as f:
-        #     f.write(self.launch_script)
-        cmd = ssh_remote_exec("ubuntu", ip_address, pem, self.launch_script_path)
+    def run_ssh_remote(self, ip_address, pem=None, verbose=False, dry=False):
+        """
+        run launch_script remotely by ip_address
+        :param ip_address:
+        :param pem:
+        :param verbose:
+        :param dry:
+        :return:
+        """
+        cmd = ssh_remote_exec("ubuntu", ip_address, pem=pem, script=self.launch_script_path)
         if dry:
             print(cmd)
         else:
