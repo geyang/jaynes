@@ -97,6 +97,6 @@ make publish
 
 ## Acknowledgements
 
-This code is inspired by @justinfu's [doodad](https://github.com/justinjfu/doodad), which is in term build on top of Peter Chen's script.
+This code is inspired by @justinfu's [doodad](https://github.com/justinjfu/doodad), which is in turn built on top of Peter Chen's script.
 
-This code is written from scratch to allow a more permissible open-source license (BSD). Go :bear:!!
+This code is written from scratch to allow a more permissible open-source license (BSD). Go bears :bear: !!
