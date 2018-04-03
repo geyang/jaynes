@@ -8,15 +8,26 @@ from jaynes.helpers import path_no_ext
 from jaynes.constants import JAYNES_PARAMS_KEY
 
 
-def s3_mount(bucket, prefix, local, remote=None, docker=None, pypath=False, file_mask="."):
+def s3_mount(bucket, prefix, local, remote_cwd=None, remote=None, remote_tar=None, docker=None, pypath=False, file_mask="."):
+    """
+    docker path does not have to be absolute. It will be made absolute automatically.
+    :param bucket:
+    :param prefix:
+    :param local:
+    :param remote:
+    :param docker:
+    :param pypath:
+    :param file_mask:
+    :return:
+    """
     with tempfile.NamedTemporaryFile('wb+', suffix='.tar') as tf:
         temp_path = tf.name
     temp_dir = os.path.dirname(temp_path)
     temp_filename = os.path.basename(temp_path)
-    remote = remote if remote else path_no_ext(f"/tmp/{temp_filename}")
-    docker = docker if docker else remote
+    remote = remote or path_no_ext(f"/tmp/{temp_filename}")
+    docker = docker or remote
     abs_local = os.path.abspath(local)
-    abs_remote = os.path.abspath(remote)
+    abs_remote = os.path.join(remote_cwd, remote)
     abs_docker = os.path.abspath(docker)
     local_script = f"""
             pwd &&
@@ -26,7 +37,7 @@ def s3_mount(bucket, prefix, local, remote=None, docker=None, pypath=False, file
             echo "uploading to s3"
             aws s3 cp {temp_path} s3://{bucket}/{prefix}/{temp_filename} 
             """
-    remote_tar = f"/tmp/{temp_filename}"
+    remote_tar = remote_tar or f"/tmp/{temp_filename}"
     remote_script = f"""
             aws s3 cp s3://{bucket}/{prefix}/{temp_filename} {remote_tar}
             mkdir -p {remote}

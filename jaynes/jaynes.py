@@ -24,8 +24,9 @@ class Jaynes:
 
     config = __init__
 
-    def mount_s3(self, **kwargs):
-        local_script, remote_script, docker_mount, _pypath = s3_mount(self.bucket, self.prefix, **kwargs)
+    def mount_s3(self, local, remote_tar=None, **kwargs):
+        local_script, remote_script, docker_mount, _pypath = s3_mount(
+            self.bucket, self.prefix, local, self.remote_cwd, remote_tar=remote_tar, **kwargs)
         if _pypath:
             self.pypath += ":" + _pypath
         self.local_setup += local_script
@@ -101,11 +102,13 @@ class Jaynes:
             ck(remote_script, verbose=verbose, shell=True)
             return self
 
-    def make_launch_script(self, fn, *args, verbose=False, sudo=False, terminate_after_finish=False, **kwargs):
+    def make_launch_script(self, fn, *args, verbose=False, sudo=False, terminate_after_finish=False, instance_tag=None,
+                           **kwargs):
+        instance_tag = instance_tag or self.prefix
         tag_current_instance = f"""
             EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
-            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={self.prefix} --region us-west-2
-            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=exp_prefix,Value={self.prefix} --region us-west-2
+            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={instance_tag} --region us-west-2
+            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=exp_prefix,Value={instance_tag} --region us-west-2
         """
         install_aws_cli = f"""
             curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
@@ -170,10 +173,11 @@ class Jaynes:
         with tempfile.NamedTemporaryFile('w+', prefix="jaynes_launcher-", suffix=".sh") as tf:
             launch_script_path = tf.name
             script_name = os.path.basename(tf.name)
+            # note: kill requires sudo
             tf.write(self.launch_script + "\n"
-                                         f"kill $(ps aux | grep '{script_name}' | awk '{{print $2}}')\n"
-                                         f"echo 'clean up all startup script processes'\n")
-
+                                          f"sudo kill $(ps aux | grep '{script_name}' | awk '{{print $2}}')\n"
+                                          f"echo 'clean up all startup script processes'\n")
+            tf.flush()
             cmd = ssh_remote_exec("ubuntu", ip_address, launch_script_path, log_dir, pem=pem, sudo=True)
             if dry:
                 print(cmd)

@@ -1,4 +1,4 @@
-# Jaynes, A Utility for running script on AWS with docker
+# Jaynes, A Utility for training ML models on AWS with docker
 <a href="figures/ETJaynes_defiant.jpg" target="_blank"><img src="figures/ETJaynes_defiant.jpg" alt="Defiant Jaynes" align="right" width="350px"></a>
 ## Todo
 
@@ -94,3 +94,9 @@ This `make dev` command should build the wheel and install it in your current py
 ```bash
 make publish
 ```
+
+## Acknowledgements
+
+This code is inspired by @justinfu's [doodad](https://github.com/justinjfu/doodad), which is in term build on top of Peter Chen's script.
+
+This code is written from scratch to allow a more permissible open-source license (BSD). Go :bear:!!
