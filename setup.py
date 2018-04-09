@@ -14,7 +14,7 @@ setup(name="jaynes",
       author="Ge Yang",
       author_email="yangge1987@gmail.com",
       license=None,
-      keywords=["jaynes", "logging", "debug", "debugging", "timer", "timeit", "decorator",
+      keywords=["jaynes", "logging", "DEBUG", "debugging", "timer", "timeit", "decorator",
                 "stopwatch", "tic", "toc"],
       classifiers=[
           "Development Status :: 4 - Beta",

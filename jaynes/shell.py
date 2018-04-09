@@ -1,13 +1,13 @@
 import subprocess
 
 
-def c(cmd, *args, verbose, **kwargs):
+def c(cmd, *args, verbose=False, **kwargs):
     if verbose:
         print(cmd, *args)
     subprocess.call(cmd, *args, **kwargs)
 
 
-def ck(cmd, *args, verbose, **kwargs):
+def ck(cmd, *args, verbose=False, **kwargs):
     if verbose:
         print(cmd, *args)
     try:

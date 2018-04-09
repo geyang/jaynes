@@ -12,5 +12,18 @@ def train(log_dir, *args, **kwargs):
             f.flush()
 
 
-LOG_DIR = "new-test-hahaha"
-abs_path = os.path.abspath(LOG_DIR)
+class RUN:
+    instance_prefix = "jaynes-test-instance-tag"
+    log_dir = os.path.abspath("test-log-dir")
+    s3_log_dir = "s3://ge-bair/"
+
+# class Logging:
+#     timestamp = ""
+#     timesteps = ""
+#     epoch = ""
+#     n_iter = ""
+#     loss_1 = ""
+#     loss_2 = ""
+#     # data
+#     img_gen_10_categories = ""
+#     mov_gen_10_categories = ""

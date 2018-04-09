@@ -5,106 +5,79 @@ import tempfile
 import uuid
 from textwrap import dedent
 
-from .components import s3_mount, output_mount, docker_run, ssh_remote_exec
-from .param_codec import serialize
+from .helpers import get_temp_dir
+from .templates import ssh_remote_exec, DockerRun
 from .shell import ck
 
 
 class Jaynes:
-    def __init__(self, remote_cwd, bucket, prefix="jaynes", log=None):
-        self.bucket = bucket
-        self.prefix = prefix
-        self.remote_cwd = remote_cwd
-        self.main_log = log
-        self.pypath = ""
-        self.local_setup = ""
-        self.upload_script = ""
-        self.remote_setup = ""
-        self.docker_mount = ""
+    def __init__(self, launch_log, mounts, docker=None):
+        launch_log = launch_log or "jaynes_launch.log"
+        self.launch_log = launch_log
+        self.mounts = mounts
+        self.set_docker(docker)
 
-    config = __init__
+    def set_docker(self, docker):
+        self.docker: DockerRun = docker
 
-    def mount_s3(self, local, remote_tar=None, **kwargs):
-        local_script, remote_script, docker_mount, _pypath = s3_mount(
-            self.bucket, self.prefix, local, self.remote_cwd, remote_tar=remote_tar, **kwargs)
-        if _pypath:
-            self.pypath += ":" + _pypath
-        self.local_setup += local_script
-        self.remote_setup += remote_script
-        self.docker_mount += " " + docker_mount
-        return self
-
-    def mount_output(self, **kwargs):
-        """
-        > `s3_dir` is prefixed with bucket name and prefix.
-
-        s3 path syntax:
-                    s3://{bucket}/{prefix}/{s3_dir}
-        local path syntax:
-                    file://{local}
-                note if local is None, no local folder will be created to downloaded.
-        remote path syntax:
-                    ssh://<remote>:{remote_cwd, remote}
-                note that the remote path is made absolute using the remote_cwd parameter
-        :param kwargs:
-        :return:
-        """
-        local_script, remote_script, docker_mount, upload, _pypath = \
-            output_mount(remote_cwd=self.remote_cwd, bucket=self.bucket, prefix=self.prefix, **kwargs)
-        if _pypath:
-            self.pypath += ":" + _pypath
-        self.local_setup += local_script
-        self.upload_script += upload
-        self.remote_setup += remote_script
-        self.docker_mount += " " + docker_mount
-        return self
-
-    def setup_docker_run(self, docker_image, docker_startup_scripts=None, use_gpu=False):
-        self.docker_image = docker_image
-        self.use_gpu = use_gpu
-        self.docker_startup_scripts = docker_startup_scripts
-        return self
-
-    def run_local(self, verbose=False, dry=False):
-        cmd = f"""{self.local_setup}"""
+    def run_local_setup(self, verbose=False, dry=False):
+        cmd = '\n'.join([m.local_script for m in self.mounts if hasattr(m, "local_script") and m.local_script])
         if dry:
             return cmd
         else:
             ck(cmd, verbose=verbose, shell=True)
             return self
 
-    def run_local_docker(self, fn, *args, verbose=False, dry=False, **kwargs):
-        abs_log = os.path.abspath(self.main_log)
-        log_dir = os.path.dirname(abs_log)
-        encoded_thunk = serialize(fn, args, kwargs)
-        docker_command = docker_run(self.docker_image, self.pypath, self.docker_startup_scripts, os.getcwd(),
-                                    self.use_gpu).format(encoded_thunk=encoded_thunk, docker_mount=self.docker_mount)
+    def launch_local_docker(self, log_dir=None, delay=None, verbose=False, dry=False):
+        # the log_dir is primarily used for the launch script. Therefore it should use ued here instead.
+        if log_dir is None:
+            log_dir = get_temp_dir()  # this is always absolute
+        log_path = os.path.join(log_dir, self.launch_log)
+
+        upload_script = '\n'.join(
+            [m.upload_script for m in self.mounts if hasattr(m, "upload_script") and m.upload_script]
+        )
+        remote_setup = "\n".join(
+            [m.remote_setup for m in self.mounts if hasattr(m, "remote_setup") and m.remote_setup]
+        )
+
         remote_script = f"""
         #!/bin/bash
         mkdir -p {log_dir}
         {{
             # clear main_log
-            truncate -s 0 {abs_log}
+            truncate -s 0 {log_path}
             
-            {self.remote_setup}
-            
+            # remote_setup
+            {remote_setup}
+            # upload_script
+            {upload_script}
             # sudo service docker start
             # pull docker
-            docker pull {self.docker_image}
-            {docker_command}
-            {self.upload_script}
+            docker pull {self.docker.docker_image}
+            # run docker
+            {self.docker.run_script}
             
-        }} >> {self.abs_log}
+            # Now sleep before ending this script
+            sleep {delay}
+        }} >> {log_path}
         """
-        if dry:
-            return remote_script
-        else:
-            ck(remote_script, verbose=verbose, shell=True)
-            return self
+        if verbose:
+            print(remote_script)
+        if not dry:
+            ck(remote_script, shell=True)
+        return self
 
-    def make_launch_script(self, fn, *args, verbose=False, sudo=False, terminate_after_finish=False, instance_tag=None,
-                           **kwargs):
-        instance_tag = instance_tag or self.prefix
+    def make_launch_script(self, log_dir, sudo=False, terminate_after_finish=False, delay=None, instance_tag=None):
+        log_path = os.path.join(log_dir, self.launch_log)
+
+        upload_script = '\n'.join(
+            [m.upload_script for m in self.mounts if hasattr(m, "upload_script") and m.upload_script]
+        )
+        remote_setup = "\n".join(
+            [m.remote_setup for m in self.mounts if hasattr(m, "remote_setup") and m.remote_setup]
+        )
+
         tag_current_instance = f"""
             EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
             aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={instance_tag} --region us-west-2
@@ -122,18 +95,17 @@ class Jaynes:
             EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id || die "wget instance-id has failed: $?"`"
             aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region us-west-2
         """
+        delay_script = f"""
+            # Now sleep before ending this script
+            sleep {delay}
+        """ if delay else ""
         # TODO: path.join is running on local computer, so it might not be quite right if remote is say windows.
-        abs_log = os.path.join(self.remote_cwd, self.main_log)
-        log_dir = os.path.dirname(abs_log)
-        encoded_thunk = serialize(fn, args, kwargs)
-        docker_command = docker_run(self.docker_image, self.pypath, self.docker_startup_scripts, os.getcwd(),
-                                    self.use_gpu).format(encoded_thunk=encoded_thunk, docker_mount=self.docker_mount)
         launch_script = f"""
         #!/bin/bash
         mkdir -p {log_dir}
         {{
             # clear main_log
-            truncate -s 0 {abs_log}
+            truncate -s 0 {log_path}
             
             die() {{ status=$1; shift; echo "FATAL: $*"; exit $status; }}
             {install_aws_cli}
@@ -141,35 +113,35 @@ class Jaynes:
             export AWS_DEFAULT_REGION=us-west-1
             {tag_current_instance}
             
-            {self.remote_setup}
-            
+            # remote_setup
+            {remote_setup}
+            # upload_script
+            {upload_script}
             # {"sudo " if sudo else ""}service docker start
             # pull docker
-            docker pull {self.docker_image}
-            
-            {self.upload_script}
-            {docker_command}
-                        
+            docker pull {self.docker.docker_image}
+            # run docker
+            {self.docker.run_script}
+            {delay_script}
             {termination_script if terminate_after_finish else ""}
-        }} >> {abs_log}
+        }} >> {log_path}
         """
 
-        launch_script = dedent(launch_script).strip()
-        self.launch_script = launch_script
-        if verbose:
-            print(self.launch_script)
+        self.launch_script = dedent(launch_script).strip()
+
         return self
 
-    def run_ssh_remote(self, ip_address, pem=None, verbose=False, dry=False):
+    def launch_ssh(self, ip_address, pem=None, script_dir=None, verbose=False, dry=False):
         """
-        run launch_script remotely by ip_address
+        run launch_script remotely by ip_address. First saves the launch script locally as a file, then use
+        scp to transfer the script to remote instance then launch.
         :param ip_address:
         :param pem:
         :param verbose:
         :param dry:
         :return:
         """
-        log_dir = os.path.dirname(self.main_log)
+        script_dir = script_dir or f"/tmp/{uuid.uuid4()}"
         with tempfile.NamedTemporaryFile('w+', prefix="jaynes_launcher-", suffix=".sh") as tf:
             launch_script_path = tf.name
             script_name = os.path.basename(tf.name)
@@ -178,31 +150,36 @@ class Jaynes:
                                           f"sudo kill $(ps aux | grep '{script_name}' | awk '{{print $2}}')\n"
                                           f"echo 'clean up all startup script processes'\n")
             tf.flush()
-            cmd = ssh_remote_exec("ubuntu", ip_address, launch_script_path, log_dir, pem=pem, sudo=True)
-            if dry:
-                print(cmd)
-            else:
+            cmd = ssh_remote_exec("ubuntu", ip_address, launch_script_path, pem=pem, sudo=True,
+                                  remote_script_dir=script_dir)
+            if not dry:
                 ck(cmd, verbose=verbose, shell=True)
+            elif verbose:
+                print(cmd)
 
-    def launch_and_run(self, region, image_id, instance_type, key_name, security_group,
-                       spot_price=None, iam_instance_profile_arn=None, verbose=False,
-                       dry=False):
+    def launch_ec2(self, region, image_id, instance_type, key_name, security_group, spot_price=None,
+                   iam_instance_profile_arn=None, verbose=False, dry=False):
         import boto3
         ec2 = boto3.client("ec2", region_name=region, aws_access_key_id=os.environ.get('AWS_ACCESS_KEY'),
                            aws_secret_access_key=os.environ.get('AWS_ACCESS_SECRET'))
 
         instance_config = dict(ImageId=image_id, KeyName=key_name, InstanceType=instance_type,
                                SecurityGroups=(security_group,),
-                               IamInstanceProfile=dict(Arn=iam_instance_profile_arn),
-                               UserData=base64.b64encode(self.launch_script.encode()).decode("utf-8"))
+                               IamInstanceProfile=dict(Arn=iam_instance_profile_arn))
         if spot_price:
-            # for detailed settings see: http://boto3.readthedocs.io/en/latest/reference/services/ec2.html#EC2.Client.request_spot_instances
+            # for detailed settings see:
+            #     http://boto3.readthedocs.io/en/latest/reference/services/ec2.html#EC2.Client.request_spot_instances
+            # issue here: https://github.com/boto/boto3/issues/368
+            instance_config.update(UserData=base64.b64encode(self.launch_script.encode()).decode("utf-8"))
             response = ec2.request_spot_instances(InstanceCount=1, LaunchSpecification=instance_config,
                                                   SpotPrice=str(spot_price), DryRun=dry)
             spot_request_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
-            print(response)
+            if verbose:
+                print(response)
             return spot_request_id
         else:
+            instance_config.update(UserData=self.launch_script)
             response = ec2.run_instances(MaxCount=1, MinCount=1, **instance_config, DryRun=dry)
-            print(response)
+            if verbose:
+                print(response)
             return response

@@ -1,15 +1,21 @@
-import os
-from jaynes import Jaynes
-from main import LOG_DIR, train, abs_path
+from jaynes import Jaynes, templates
+from main import train, RUN
 
-J = Jaynes(os.getcwd(), bucket="ge-bair", log=LOG_DIR + "/startup.log")
-J.mount_s3(local="./", pypath=True)
-J.mount_s3(local="../../", pypath=True, file_mask="""./__init__.py ./jaynes""")
-J.mount_output(s3_dir=LOG_DIR, local=LOG_DIR, remote=LOG_DIR, docker=abs_path, sync_s3=False)
-J.run_local()
-J.setup_docker_run("python:3.6", docker_startup_scripts=("pip install cloudpickle",), use_gpu=False)
-J.run_local_docker(train, a="hey", b=[0, 1, 2], log_dir=abs_path)
-# print(J.run_local(dry=False))
-# print(J.make_launch_script(docker_image="python:3.6", dry=True))
-
-# J.apply()
+S3_PREFIX = "s3://ge-bair/code/new-experiment/"
+J = Jaynes(
+    launch_log="jaynes_launch.log",
+    mounts=[
+        templates.S3Mount(local="./", s3_prefix=S3_PREFIX, pypath=True),
+        templates.S3Mount(local="../../", s3_prefix=S3_PREFIX, pypath=True, file_mask="./__init__.py ./jaynes"),
+        templates.S3UploadMount(docker_abs=RUN.log_dir, s3_prefix=S3_PREFIX, local=RUN.log_dir, sync_s3=True)
+    ],
+)
+J.set_docker(
+    docker=templates.DockerRun("python:3.6",
+                               pypath=":".join([m.pypath for m in J.mounts if hasattr(m, "pypath") and m.pypath]),
+                               docker_startup_scripts=("pip install cloudpickle",),
+                               docker_mount=" ".join([m.docker_mount for m in J.mounts]),
+                               use_gpu=False).run(train, log_dir=RUN.log_dir)
+)
+J.run_local_setup(verbose=True)
+J.launch_local_docker(verbose=True, delay=30)
