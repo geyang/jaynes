@@ -20,7 +20,8 @@ class RemoteMount():
 
 
 class S3Mount:
-    def __init__(self, local, s3_prefix, remote=None, remote_tar=None, docker=None, pypath=False, file_mask="."):
+    def __init__(self, local, s3_prefix, remote=None, remote_tar=None, docker=None, pypath=False, excludes="",
+                 file_mask="."):
         """
         Tars a local folder, uploads the content to S3, downloads the tar ball on the remote instance and mounts it
         in docker.
@@ -45,9 +46,9 @@ class S3Mount:
                 pwd &&
                 mkdir -p {temp_dir}
                 # Do not use absolute path in tar.
-                tar czf {local_tar} -C "{local_abs}" {file_mask}
+                tar {excludes} -czf {local_tar} -C "{local_abs}" {file_mask}
                 echo "uploading to s3"
-                aws s3 cp {local_tar} {s3_prefix}{temp_filename} 
+                aws s3 cp {local_tar} {s3_prefix}{temp_filename} --only-show-errors
                 """
         remote_tar = remote_tar or f"/tmp/{temp_filename}"
         remote_abs = remote or f"/tmp/{temp_basename}"
@@ -105,7 +106,7 @@ class S3UploadMount:
                 done & echo "sync {local} initiated"
             """
         self.upload_script = f"""
-                aws s3 cp --recursive {remote_abs} {s3_prefix} """
+                aws s3 cp --recursive {remote_abs} {s3_prefix} --only-show-errors"""
         self.remote_setup = f"""
                 echo "making main_log directory {remote_abs}"
                 mkdir -p {remote_abs}
