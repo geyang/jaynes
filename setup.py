@@ -22,5 +22,5 @@ setup(name="jaynes",
           "Programming Language :: Python :: 3"
       ],
       packages=["jaynes"],
-      install_requires=["cloudpickle", "params_proto"]
+      install_requires=["cloudpickle", "params_proto", 'moleskin']
       )

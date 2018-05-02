@@ -144,6 +144,7 @@ class DockerRun:
               f"""{';'.join(docker_startup_scripts) + ';' if len(docker_startup_scripts) else ''}""" \
               f"""export PYTHONPATH=$PYTHONPATH{pypath};""" \
               f"""{"cd '{}';".format(cwd) if cwd else ""}""" \
+              f"pwd;" \
               f"""{JAYNES_PARAMS_KEY}={{encoded_thunk}} {entry_script}"""
         docker_container_name = uuid.uuid4()
         test_gpu = f"""
