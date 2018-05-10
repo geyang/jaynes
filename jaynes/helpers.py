@@ -17,4 +17,4 @@ def tag_instance(Name=None, **kwargs):
     cmd = f'''"EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`" && '''\
           f"aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value='{Name}' --region us-west-2"
     # f"aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=exp_prefix,Value={instance_tag} --region us-west-2"
-    return ck(cmd, shell=True)
+    return ck(cmd, shell=True, **kwargs)
