@@ -11,10 +11,10 @@ from .shell import ck
 
 
 class Jaynes:
-    def __init__(self, launch_log, mounts, docker=None):
-        launch_log = launch_log or "jaynes_launch.log"
-        self.launch_log = launch_log
-        self.mounts = mounts
+    def __init__(self, launch_log=None, error_log=None, mounts=None, docker=None):
+        self.launch_log = launch_log or "jaynes_launch.log"
+        self.error_log = error_log or "jaynes_launch.err.log"
+        self.mounts = mounts or []
         self.set_docker(docker)
 
     def set_docker(self, docker):
@@ -33,6 +33,7 @@ class Jaynes:
         if log_dir is None:
             log_dir = get_temp_dir()  # this is always absolute
         log_path = os.path.join(log_dir, self.launch_log)
+        error_path = os.path.join(log_dir, self.error_log)
 
         upload_script = '\n'.join(
             [m.upload_script for m in self.mounts if hasattr(m, "upload_script") and m.upload_script]
@@ -43,10 +44,13 @@ class Jaynes:
 
         remote_script = f"""
         #!/bin/bash
+        # to allow process substitution
+        set +o posix
         mkdir -p {log_dir}
         {{
             # clear main_log
             truncate -s 0 {log_path}
+            truncate -s 0 {error_path}
             
             # remote_setup
             {remote_setup}
@@ -60,7 +64,7 @@ class Jaynes:
             
             # Now sleep before ending this script
             sleep {delay}
-        }} >> {log_path}
+        }} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
         """
         if verbose:
             print(remote_script)
@@ -70,6 +74,7 @@ class Jaynes:
 
     def make_launch_script(self, log_dir, sudo=False, terminate_after_finish=False, delay=None, instance_tag=None):
         log_path = os.path.join(log_dir, self.launch_log)
+        error_path = os.path.join(log_dir, self.error_log)
 
         upload_script = '\n'.join(
             [m.upload_script for m in self.mounts if hasattr(m, "upload_script") and m.upload_script]
@@ -102,10 +107,13 @@ class Jaynes:
         # TODO: path.join is running on local computer, so it might not be quite right if remote is say windows.
         launch_script = f"""
         #!/bin/bash
+        # to allow process substitution
+        set +o posix
         mkdir -p {log_dir}
         {{
             # clear main_log
             truncate -s 0 {log_path}
+            truncate -s 0 {error_path}
             
             die() {{ status=$1; shift; echo "FATAL: $*"; exit $status; }}
             {install_aws_cli}
@@ -124,7 +132,7 @@ class Jaynes:
             {self.docker.run_script}
             {delay_script}
             {termination_script if terminate_after_finish else ""}
-        }} >> {log_path}
+        }} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
         """
 
         self.launch_script = dedent(launch_script).strip()

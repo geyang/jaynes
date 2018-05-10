@@ -21,7 +21,7 @@ class RemoteMount():
 
 class S3Mount:
     def __init__(self, local, s3_prefix, remote=None, remote_tar=None, docker=None, pypath=False, excludes="",
-                 file_mask="."):
+                 file_mask=".", name=None):
         """
         Tars a local folder, uploads the content to S3, downloads the tar ball on the remote instance and mounts it
         in docker.
@@ -31,9 +31,10 @@ class S3Mount:
         :param docker:
         :param pypath:
         :param file_mask:
+        :param name: the name for the tar ball.
         :return:
         """
-        temp_basename = uuid.uuid4()
+        temp_basename = name or uuid.uuid4()
         temp_filename = f"{temp_basename}.tar"
         temp_dir = get_temp_dir()
         local_tar = os.path.join(temp_dir, temp_filename)
@@ -61,7 +62,8 @@ class S3Mount:
 
 
 class S3UploadMount:
-    def __init__(self, docker_abs, s3_prefix, remote_abs=None, local=None, interval=15, pypath=False, sync_s3=True):
+    def __init__(self, docker_abs, s3_prefix, remote_abs=None, name=None, local=None, interval=15, pypath=False,
+                 sync_s3=True):
         """
         Mounting a remote directory to docker, and upload it's content periodically to s3.
 
@@ -73,6 +75,7 @@ class S3UploadMount:
                     ssh://<remote>:{remote if isabs(remote) else remote_cwd + remote}
                 note that the remote path is made absolute using the remote_cwd parameter
         :param remote_cwd:
+        :param name:
         :param bucket:
         :param prefix:
         :param s3_prefix: Need slash at the end.
@@ -86,7 +89,7 @@ class S3UploadMount:
         """
 
         if remote_abs is None:
-            remote_abs = f"/tmp/jaynes_mounts/{uuid.uuid4()}"
+            remote_abs = f"/tmp/jaynes_mounts/{uuid.uuid4() if name is None else name}"
         else:
             assert os.path.isabs(remote_abs), "ATTENTION: remote_abs path has to be an absolute path."
 
