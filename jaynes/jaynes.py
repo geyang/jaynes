@@ -72,7 +72,8 @@ class Jaynes:
             ck(remote_script, shell=True)
         return self
 
-    def make_launch_script(self, log_dir, sudo=False, terminate_after_finish=False, delay=None, instance_tag=None):
+    def make_launch_script(self, log_dir, sudo=False, terminate_after_finish=False, delay=None, instance_tag=None,
+                           region=None):
         log_path = os.path.join(log_dir, self.launch_log)
         error_path = os.path.join(log_dir, self.error_log)
 
@@ -85,8 +86,8 @@ class Jaynes:
 
         tag_current_instance = f"""
             EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
-            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={instance_tag} --region us-west-2
-            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=exp_prefix,Value={instance_tag} --region us-west-2
+            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={instance_tag} --region {region}
+            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=exp_prefix,Value={instance_tag} --region {region}
         """
         install_aws_cli = f"""
             rm -rf awscli-bundle

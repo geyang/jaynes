@@ -12,9 +12,12 @@ def get_temp_dir():
     return os.path.realpath(tmp_dir)
 
 
-def tag_instance(Name=None, **kwargs):
+def tag_instance(Name=None, region="us-west-2", **kwargs):
     from .shell import ck
-    cmd = f'''EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`" && '''\
-          f"aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value='{Name}' --region us-west-2"
-    # f"aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=exp_prefix,Value={instance_tag} --region us-west-2"
+    template = f"aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key='{{key}}',Value='{{value}}' --region {region}"
+    if Name:
+        kwargs.update(dict(Name=Name))
+    cmd = '''EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`" ''' + \
+          "".join([template.format(k, v) for k, v in kwargs.items()])
+
     return ck(cmd, shell=True, **kwargs)
