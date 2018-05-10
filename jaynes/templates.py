@@ -1,8 +1,6 @@
 import os
-import tempfile
 from textwrap import dedent
-
-import uuid
+from uuid import uuid4
 
 from jaynes.helpers import get_temp_dir
 from jaynes.constants import JAYNES_PARAMS_KEY
@@ -20,24 +18,29 @@ class RemoteMount():
 
 
 class S3Mount:
-    def __init__(self, local, s3_prefix, remote=None, remote_tar=None, docker=None, pypath=False, excludes="",
-                 file_mask=".", name=None):
+    def __init__(self, local, s3_prefix, remote=None, remote_tar=None, docker=None, pypath=False, excludes=None,
+                 file_mask=None, name=None):
         """
         Tars a local folder, uploads the content to S3, downloads the tar ball on the remote instance and mounts it
         in docker.
-        :param local:
-        :param s3_prefix:
-        :param remote:
-        :param docker:
-        :param pypath:
-        :param file_mask:
-        :param name: the name for the tar ball.
-        :return:
+        
+        :param name: the name for the tar ball. Default to {uuid4()}
+        :param local: path to the local directory. Doesn't have to be absolute.
+        :param s3_prefix: The s3 prefix including the s3: protocol, the bucket, and the path prefix.
+        :param remote: The path on the remote instance. Default /tmp/{uuid4()}
+        :param docker: The path for the docker instance. Can be something like /Users/ge/project-folder/blah
+        :param pypath (bool): Whether this directory should be added to the python path
+        :param excludes: The files paths to exclude, default to "--exclude='*__pycache__'"
+        :param file_mask: The file mask for files to include. Default to "."
+        :return: self
         """
-        temp_basename = name or uuid.uuid4()
-        temp_filename = f"{temp_basename}.tar"
+        # I fucking hate the behavior of python defaults. -- GY
+        file_mask = file_mask or "."  # file_mask can Not be None or "".
+        excludes = excludes or "--exclude='*__pycache__'"
+        name = name or uuid4()
+        tar_name = f"{name}.tar"
         temp_dir = get_temp_dir()
-        local_tar = os.path.join(temp_dir, temp_filename)
+        local_tar = os.path.join(temp_dir, tar_name)
         local_abs = os.path.abspath(local)
         if remote:
             assert os.path.isabs(remote), "remote path has to be absolute"
@@ -49,12 +52,12 @@ class S3Mount:
                 # Do not use absolute path in tar.
                 tar {excludes} -czf {local_tar} -C "{local_abs}" {file_mask}
                 echo "uploading to s3"
-                aws s3 cp {local_tar} {s3_prefix}{temp_filename} --only-show-errors
+                aws s3 cp {local_tar} {s3_prefix}{tar_name} --only-show-errors
                 """
-        remote_tar = remote_tar or f"/tmp/{temp_filename}"
-        remote_abs = remote or f"/tmp/{temp_basename}"
+        remote_tar = remote_tar or f"/tmp/{tar_name}"
+        remote_abs = remote or f"/tmp/{name}"
         self.remote_setup = f"""
-                aws s3 cp {s3_prefix}{temp_filename} {remote_tar}
+                aws s3 cp {s3_prefix}{tar_name} {remote_tar}
                 mkdir -p {remote_abs}
                 tar -zxf {remote_tar} -C {remote_abs}
                 """
@@ -74,6 +77,7 @@ class S3UploadMount:
         remote path syntax:
                     ssh://<remote>:{remote if isabs(remote) else remote_cwd + remote}
                 note that the remote path is made absolute using the remote_cwd parameter
+
         :param remote_cwd:
         :param name:
         :param bucket:
@@ -89,7 +93,7 @@ class S3UploadMount:
         """
 
         if remote_abs is None:
-            remote_abs = f"/tmp/jaynes_mounts/{uuid.uuid4() if name is None else name}"
+            remote_abs = f"/tmp/jaynes_mounts/{uuid4() if name is None else name}"
         else:
             assert os.path.isabs(remote_abs), "ATTENTION: remote_abs path has to be an absolute path."
 
@@ -142,14 +146,14 @@ class DockerRun:
         cwd = cwd or os.getcwd()
         docker_cmd = "nvidia-docker" if use_gpu else "docker"
         entry_script = "python -u -m jaynes.entry"
-        docker_startup_scripts = docker_startup_scripts or ()
+        docker_startup_scripts = docker_startup_scripts or ('yes | pip install jaynes',)
         cmd = f"""echo "Running in docker{' (gpu)' if use_gpu else ''}";""" \
               f"""{';'.join(docker_startup_scripts) + ';' if len(docker_startup_scripts) else ''}""" \
               f"""export PYTHONPATH=$PYTHONPATH{pypath};""" \
               f"""{"cd '{}';".format(cwd) if cwd else ""}""" \
               f"pwd;" \
               f"""{JAYNES_PARAMS_KEY}={{encoded_thunk}} {entry_script}"""
-        docker_container_name = uuid.uuid4()
+        docker_container_name = uuid4()
         test_gpu = f"""
                 echo 'Testing nvidia-smi inside docker'
                 {docker_cmd} run --rm {docker_image} nvidia-smi
@@ -171,6 +175,7 @@ class DockerRun:
 def ssh_remote_exec(user, ip_address, script_path, pem=None, sudo=True, remote_script_dir=None):
     """
     run script remotely via ssh agent
+
     :param user:
     :param ip_address:
     :param pem:
