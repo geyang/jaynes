@@ -18,6 +18,6 @@ def tag_instance(Name=None, region="us-west-2", **kwargs):
     if Name:
         kwargs.update(dict(Name=Name))
     cmd = '''EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`" ''' + \
-          "".join([template.format(k, v) for k, v in kwargs.items()])
+          "".join([template.format(key=k, value=v) for k, v in kwargs.items()])
 
     return ck(cmd, shell=True, **kwargs)
