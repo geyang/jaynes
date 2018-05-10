@@ -36,7 +36,7 @@ class S3Mount:
         """
         # I fucking hate the behavior of python defaults. -- GY
         file_mask = file_mask or "."  # file_mask can Not be None or "".
-        excludes = excludes or "--exclude='*__pycache__'"
+        excludes = excludes or "--exclude='*__pycache__' --exclude='.git'"
         name = name or uuid4()
         tar_name = f"{name}.tar"
         temp_dir = get_temp_dir()
@@ -146,7 +146,7 @@ class DockerRun:
         cwd = cwd or os.getcwd()
         docker_cmd = "nvidia-docker" if use_gpu else "docker"
         entry_script = "python -u -m jaynes.entry"
-        docker_startup_scripts = docker_startup_scripts or ('yes | pip install jaynes',)
+        docker_startup_scripts = docker_startup_scripts or ('yes | pip install jaynes awscli',)
         cmd = f"""echo "Running in docker{' (gpu)' if use_gpu else ''}";""" \
               f"""{';'.join(docker_startup_scripts) + ';' if len(docker_startup_scripts) else ''}""" \
               f"""export PYTHONPATH=$PYTHONPATH{pypath};""" \
