@@ -140,7 +140,7 @@ class S3UploadMount:
 
 class DockerRun:
     def __init__(self, docker_image, pypath="", docker_startup_scripts=None, docker_mount=None, cwd=None,
-                 use_gpu=False):
+                 use_gpu=False, interactive=False):
         self.run_script = None
         self.docker_image = docker_image
         cwd = cwd or os.getcwd()
@@ -162,7 +162,7 @@ class DockerRun:
                 {test_gpu if use_gpu else "" }
                 
                 echo 'Now run docker'
-                {docker_cmd} run {docker_mount} --name {docker_container_name} \\
+                {docker_cmd} run {"-it" if interactive else ""} {docker_mount} --name {docker_container_name} \\
                 {docker_image} /bin/bash -c '{cmd}'
                 """
 
