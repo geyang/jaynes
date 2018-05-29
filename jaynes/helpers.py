@@ -21,3 +21,10 @@ def tag_instance(Name=None, region="us-west-2", verbose=False, **kwargs):
           " && ".join([template.format(key=k, value=v) for k, v in kwargs.items()])
 
     return ck(cmd, shell=True, verbose=verbose)
+
+
+def is_interactive():
+    """pyCharm emulate terminal confuses this, show up as tty but then docker fails"""
+    import os
+    import sys
+    return os.isatty(sys.stdout.fileno())

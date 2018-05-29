@@ -7,7 +7,7 @@ from textwrap import dedent
 
 from .helpers import get_temp_dir
 from .templates import ssh_remote_exec, DockerRun
-from .shell import ck
+from .shell import ck, popen
 
 
 class Jaynes:
@@ -19,6 +19,9 @@ class Jaynes:
 
     def set_docker(self, docker):
         self.docker: DockerRun = docker
+
+    def mount(self, *mounts):
+        self.mounts.extend(mounts)
 
     def run_local_setup(self, verbose=False, dry=False):
         cmd = '\n'.join([m.local_script for m in self.mounts if hasattr(m, "local_script") and m.local_script])
@@ -119,7 +122,7 @@ class Jaynes:
             truncate -s 0 {error_path}
             
             die() {{ status=$1; shift; echo "FATAL: $*"; exit $status; }}
-            {install_aws_cli}
+            {install_aws_cli if terminate_after_finish else ""}
             
             export AWS_DEFAULT_REGION=us-west-1
             {tag_current_instance if instance_tag else ""}
@@ -142,11 +145,12 @@ class Jaynes:
 
         return self
 
-    def launch_ssh(self, ip_address, pem=None, script_dir=None, verbose=False, dry=False):
+    def launch_ssh(self, ip_address, pem=None, script_dir=None, verbose=False, dry=False, detached=False):
         """
         run launch_script remotely by ip_address. First saves the launch script locally as a file, then use
         scp to transfer the script to remote instance then launch.
 
+        :param detached: use call instead of checkcall
         :param ip_address:
         :param pem:
         :param verbose:
@@ -162,12 +166,22 @@ class Jaynes:
                                           f"sudo kill $(ps aux | grep '{script_name}' | awk '{{print $2}}')\n"
                                           f"echo 'clean up all startup script processes'\n")
             tf.flush()
-            cmd = ssh_remote_exec("ubuntu", ip_address, launch_script_path, pem=pem, sudo=True,
-                                  remote_script_dir=script_dir)
+            upload_script, launch = ssh_remote_exec("ubuntu", ip_address, launch_script_path, pem=pem, sudo=True,
+                                                    remote_script_dir=script_dir)
             if not dry:
-                ck(cmd, verbose=verbose, shell=True)
+                if upload_script:
+                    # done: separate out the two commands
+                    ck(upload_script, verbose=verbose, shell=True)
+                if detached:
+                    import sys
+                    popen(launch, verbose=verbose, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+                else:
+                    ck(launch, verbose=verbose, shell=True)
+
             elif verbose:
-                print(cmd)
+                if upload_script:
+                    print(upload_script)
+                print(launch)
 
     def launch_ec2(self, region, image_id, instance_type, key_name, security_group, spot_price=None,
                    iam_instance_profile_arn=None, verbose=False, dry=False):

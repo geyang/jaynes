@@ -1,6 +1,15 @@
 import subprocess
 
 
+def popen(cmd, *args, verbose=False, **kwargs):
+    if verbose:
+        if args:
+            print(cmd, *args)
+        else:
+            print(cmd)
+    subprocess.Popen(cmd, *args, **kwargs)
+
+
 def c(cmd, *args, verbose=False, **kwargs):
     if verbose:
         if args:
