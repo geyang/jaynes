@@ -32,7 +32,7 @@ class Jaynes:
             return self
 
     def launch_local_docker(self, log_dir=None, delay=None, verbose=False, dry=False):
-        # the log_dir is primarily used for the launch script. Therefore it should use ued here instead.
+        # the log_dir is primarily used for the run script. Therefore it should use ued here instead.
         if log_dir is None:
             log_dir = get_temp_dir()  # this is always absolute
         log_path = os.path.join(log_dir, self.launch_log)
@@ -75,8 +75,8 @@ class Jaynes:
             ck(remote_script, shell=True)
         return self
 
-    def make_launch_script(self, log_dir, sudo=False, terminate_after_finish=False, delay=None, instance_tag=None,
-                           region=None):
+    def make_launch_script(self, log_dir, sudo=False, terminate_after_finish=False, delay=None,
+                           instance_tag=None, region=None):
         log_path = os.path.join(log_dir, self.launch_log)
         error_path = os.path.join(log_dir, self.error_log)
 
@@ -89,8 +89,8 @@ class Jaynes:
 
         tag_current_instance = f"""
             EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
-            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=Name,Value={instance_tag} --region {region}
-            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags Key=exp_prefix,Value={instance_tag} --region {region}
+            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=Name,Value={instance_tag}' --region {region}
+            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=exp_prefix,Value={instance_tag}' --region {region}
         """
         install_aws_cli = f"""
             rm -rf awscli-bundle
@@ -104,7 +104,7 @@ class Jaynes:
         termination_script = f"""
             echo "Now terminate this instance"
             EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id || die "wget instance-id has failed: $?"`"
-            aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region us-west-2
+            aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region {region}
         """
         delay_script = f"""
             # Now sleep before ending this script
@@ -124,7 +124,7 @@ class Jaynes:
             die() {{ status=$1; shift; echo "FATAL: $*"; exit $status; }}
             {install_aws_cli if terminate_after_finish else ""}
             
-            export AWS_DEFAULT_REGION=us-west-1
+            export AWS_DEFAULT_REGION={region}
             {tag_current_instance if instance_tag else ""}
             
             # remote_setup
@@ -147,8 +147,8 @@ class Jaynes:
 
     def launch_ssh(self, ip_address, pem=None, script_dir=None, verbose=False, dry=False, detached=False):
         """
-        run launch_script remotely by ip_address. First saves the launch script locally as a file, then use
-        scp to transfer the script to remote instance then launch.
+        run launch_script remotely by ip_address. First saves the run script locally as a file, then use
+        scp to transfer the script to remote instance then run.
 
         :param detached: use call instead of checkcall
         :param ip_address:

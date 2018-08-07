@@ -5,12 +5,13 @@ from uuid import uuid4
 from jaynes.helpers import get_temp_dir
 from jaynes.constants import JAYNES_PARAMS_KEY
 from jaynes.param_codec import serialize
+from os.path import join as pathJoin
 
 
 class RemoteMount():
     def __init__(self, remote_abs, docker_abs, pypath=False):
         """Mount a directory on the remote instance to docker"""
-        # remote_abs = remote if os.path.isabs(remote) else os.path.join(self.remote_cwd, remote)
+        # remote_abs = remote if os.path.isabs(remote) else pathJoin(self.remote_cwd, remote)
         assert os.path.isabs(remote_abs), "remote path has to be absolute"
         assert os.path.isabs(docker_abs), "docker linked path has to be absolute"
         self.docker_mount = f"-v '{remote_abs}':'{docker_abs}'"
@@ -19,7 +20,7 @@ class RemoteMount():
 
 class S3Mount:
     def __init__(self, local, s3_prefix, remote=None, remote_tar=None, docker=None, pypath=False, excludes=None,
-                 file_mask=None, name=None, compress=True):
+                 file_mask=None, name=None, compress=True, public=True, no_signin=True):
         """
         Tars a local folder, uploads the content to S3, downloads the tar ball on the remote instance and mounts it
         in docker.
@@ -39,28 +40,29 @@ class S3Mount:
         excludes = excludes or "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'"
         name = name or uuid4()
         tar_name = f"{name}.tar"
-        temp_dir = get_temp_dir()
-        local_tar = os.path.join(temp_dir, tar_name)
-        local_abs = os.path.abspath(local)
+        self.temp_dir = get_temp_dir()
+        local_tar = pathJoin(self.temp_dir, tar_name)
+        assert os.path.isabs(local), 'local path must be absolute to avoid ambiguity.'
+        local_abs = local
         if remote:
             assert os.path.isabs(remote), "remote path has to be absolute"
         docker_abs = os.path.abspath(docker) if docker else local_abs
         self.pypath = docker_abs if pypath else None
         self.local_script = f"""
                 pwd &&
-                mkdir -p {temp_dir}
+                mkdir -p '{self.temp_dir}'
                 # Do not use absolute path in tar.
-                tar {excludes} -c{"z" if compress else ""}f {local_tar} -C "{local_abs}" {file_mask}
+                tar {excludes} -c{"z" if compress else ""}f '{local_tar}' -C '{local_abs}' {file_mask}
                 echo "uploading to s3"
-                # aws s3 cp {local_tar} {s3_prefix}{tar_name} --only-show-errors
-                aws s3 cp {local_tar} {s3_prefix}{tar_name}
+                # aws s3 cp '{local_tar}' '{pathJoin(s3_prefix, tar_name)}' --only-show-errors
+                aws s3 cp '{local_tar}' '{pathJoin(s3_prefix, tar_name)}' {'--acl public-read-write' if public else ''}
                 """
         remote_tar = remote_tar or f"/tmp/{tar_name}"
         remote_abs = remote or f"/tmp/{name}"
         self.remote_setup = f"""
-                aws s3 cp {s3_prefix}{tar_name} {remote_tar}
-                mkdir -p {remote_abs}
-                tar -{"z" if compress else ""}xf {remote_tar} -C {remote_abs}
+                aws s3 cp '{pathJoin(s3_prefix, tar_name)}' '{remote_tar}' {'--no-sign-request' if no_signin else ''}
+                mkdir -p '{remote_abs}'
+                tar -{"z" if compress else ""}xf '{remote_tar}' -C '{remote_abs}'
                 """
         self.docker_mount = f"-v '{remote_abs}':'{docker_abs}'"
 
@@ -107,22 +109,22 @@ class S3UploadMount:
             "ATTENTION: docker path has to be absolute, to make sure your code knows where it is writing to."
         if local:
             download_script = f"""
-                aws s3 cp --recursive {s3_prefix} {local} || echo "s3 bucket is EMPTY" """
+                aws s3 cp --recursive {s3_prefix} '{local}' || echo "s3 bucket is EMPTY" """
             self.local_script = f"""
-                mkdir -p {local}
+                mkdir -p '{local}'
                 while true; do
                     echo "downloading..." {download_script}
                     sleep {interval}
-                done & echo "sync {local} initiated"
+                done & echo 'sync {local} initiated'
             """
         else:
             print('S3UploadMount(**{}) generated no local_script.'.format(locals()))
             # pass
         self.upload_script = f"""
-                aws s3 cp --recursive {remote_abs} {s3_prefix} """  # --only-show-errors"""
+                aws s3 cp --recursive '{remote_abs}' {s3_prefix} """  # --only-show-errors"""
         self.remote_setup = f"""
-                echo "making main_log directory {remote_abs}"
-                mkdir -p {remote_abs}
+                echo 'making main_log directory {remote_abs}'
+                mkdir -p '{remote_abs}'
                 echo "made main_log directory" """ + ("" if not sync_s3 else f"""
                 while true; do
                     echo "uploading..." {self.upload_script}
@@ -167,7 +169,7 @@ class DockerRun:
         docker_startup_scripts = docker_startup_scripts or ('yes | pip install jaynes awscli',)
         cmd = f"""echo "Running in docker{' (gpu)' if use_gpu else ''}";""" \
               f"""{';'.join(docker_startup_scripts) + ';' if len(docker_startup_scripts) else ''}""" \
-              f"""export PYTHONPATH=$PYTHONPATH{pypath};""" \
+              f"""export PYTHONPATH=$PYTHONPATH:{pypath};""" \
               f"""{"cd '{}';".format(cwd) if cwd else ""}""" \
               f"pwd;" \
               f"""{JAYNES_PARAMS_KEY}={{encoded_thunk}} {entry_script}"""
@@ -188,7 +190,7 @@ class DockerRun:
                 {remove_by_name}
                 {docker_cmd} info
                 echo 'Now run docker'
-                {docker_cmd} run -i{"t" if tty else ""} {ipc_config}{docker_mount} --name {docker_container_name} \\
+                {docker_cmd} run -i{"t" if tty else ""} {ipc_config}{docker_mount} --name '{docker_container_name}' \\
                 {docker_image} /bin/bash -c '{cmd}'
                 """
 
@@ -217,7 +219,7 @@ def ssh_remote_exec(user, ip_address, script_path, pem=None, sudo=True, remote_s
         # remote_script_dir = remote_script_dir or script_path
         # remote_directory = os.path.dirname(remote_script_dir)
         assert os.path.isabs(remote_script_dir), "remote_script_dir need to be absolute"
-        remote_path = os.path.join(remote_script_dir, os.path.basename(script_path))
+        remote_path = pathJoin(remote_script_dir, os.path.basename(script_path))
         send_file = \
             f"""ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem}' if pem else ''} 'mkdir -p {remote_script_dir}'\n""" \
             f"""scp {f'-i {pem}' if pem else ''} {script_path} {user}@{ip_address}:{remote_script_dir}""",
