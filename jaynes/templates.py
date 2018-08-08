@@ -213,7 +213,8 @@ def ssh_remote_exec(user, ip_address, script_path, pem=None, sudo=True, remote_s
     :return:
     """
     # cmd = f"""plink root@MachineB -m local_script.sh"""  # windows
-    options = "-o 'StrictHostKeyChecking=no' -o 'PasswordAuthentication=no' -o 'ChallengeResponseAuthentication=no'"
+    # options = "-o 'StrictHostKeyChecking=no' -o 'PasswordAuthentication=no' -o 'ChallengeResponseAuthentication=no'"
+    options = "-o 'StrictHostKeyChecking=no'"
     if sudo:
         # cmd = f"""ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem} ' if pem else ''}'echo \"rootpass\" | sudo -Sv && bash -s' < {script_path}"""
         # solution found: https://stackoverflow.com/questions/44916319/how-to-sudo-run-a-local-script-over-ssh
