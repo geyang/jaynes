@@ -213,6 +213,7 @@ def ssh_remote_exec(user, ip_address, script_path, pem=None, sudo=True, remote_s
     :return:
     """
     # cmd = f"""plink root@MachineB -m local_script.sh"""  # windows
+    options = "-o 'StrictHostKeyChecking=no' -o 'PasswordAuthentication=no' -o 'ChallengeResponseAuthentication=no'"
     if sudo:
         # cmd = f"""ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem} ' if pem else ''}'echo \"rootpass\" | sudo -Sv && bash -s' < {script_path}"""
         # solution found: https://stackoverflow.com/questions/44916319/how-to-sudo-run-a-local-script-over-ssh
@@ -221,10 +222,10 @@ def ssh_remote_exec(user, ip_address, script_path, pem=None, sudo=True, remote_s
         assert os.path.isabs(remote_script_dir), "remote_script_dir need to be absolute"
         remote_path = pathJoin(remote_script_dir, os.path.basename(script_path))
         send_file = \
-            f"""ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem}' if pem else ''} 'mkdir -p {remote_script_dir}'\n""" \
+            f"""ssh {options} {user}@{ip_address} {f'-i {pem}' if pem else ''} 'mkdir -p {remote_script_dir}'\n""" \
             f"""scp {f'-i {pem}' if pem else ''} {script_path} {user}@{ip_address}:{remote_script_dir}""",
-        launch = f"""ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem}' if pem else ''} 'sudo -n -s bash {remote_path}'"""
+        launch = f"""ssh {options} {user}@{ip_address} {f'-i {pem}' if pem else ''} 'sudo -n -s bash {remote_path}'"""
         return send_file, launch
     else:
-        launch = f"""ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem}' if pem else ''} 'bash -s' < {script_path}"""
+        launch = f"""ssh {options} {user}@{ip_address} {f'-i {pem}' if pem else ''} 'bash -s' < {script_path}"""
         return None, launch

@@ -145,7 +145,7 @@ class Jaynes:
 
         return self
 
-    def launch_ssh(self, ip_address, pem=None, script_dir=None, verbose=False, dry=False, detached=False):
+    def launch_ssh(self, ip_address, username="ubuntu", pem=None, script_dir=None, verbose=False, dry=False, detached=False):
         """
         run launch_script remotely by ip_address. First saves the run script locally as a file, then use
         scp to transfer the script to remote instance then run.
@@ -166,7 +166,7 @@ class Jaynes:
                                           f"sudo kill $(ps aux | grep '{script_name}' | awk '{{print $2}}')\n"
                                           f"echo 'clean up all startup script processes'\n")
             tf.flush()
-            upload_script, launch = ssh_remote_exec("ubuntu", ip_address, launch_script_path, pem=pem, sudo=True,
+            upload_script, launch = ssh_remote_exec(username, ip_address, launch_script_path, pem=pem, sudo=True,
                                                     remote_script_dir=script_dir)
             if not dry:
                 if upload_script:
