@@ -87,11 +87,14 @@ class Jaynes:
             [m.remote_setup for m in self.mounts if hasattr(m, "remote_setup") and m.remote_setup]
         )
 
+        assert len(instance_tag) <= 128, "Error: aws limits instance tag to 128 unicode characters."
+
         tag_current_instance = f"""
             EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
             aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=Name,Value={instance_tag}' --region {region}
             aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=exp_prefix,Value={instance_tag}' --region {region}
         """
+        # todo:
         install_aws_cli = f"""
             rm -rf awscli-bundle
             curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
@@ -122,7 +125,7 @@ class Jaynes:
             truncate -s 0 {error_path}
             
             die() {{ status=$1; shift; echo "FATAL: $*"; exit $status; }}
-            {install_aws_cli if terminate_after_finish else ""}
+            {install_aws_cli}
             
             export AWS_DEFAULT_REGION={region}
             {tag_current_instance if instance_tag else ""}
@@ -145,7 +148,8 @@ class Jaynes:
 
         return self
 
-    def launch_ssh(self, ip_address, username="ubuntu", pem=None, script_dir=None, sudo=False, verbose=False, dry=False, detached=False):
+    def launch_ssh(self, ip_address, username="ubuntu", pem=None, script_dir=None, sudo=False, verbose=False, dry=False,
+                   detached=False):
         """
         run launch_script remotely by ip_address. First saves the run script locally as a file, then use
         scp to transfer the script to remote instance then run.
@@ -158,30 +162,37 @@ class Jaynes:
         :return:
         """
         script_dir = script_dir or f"/tmp/{uuid.uuid4()}"
-        with tempfile.NamedTemporaryFile('w+', prefix="jaynes_launcher-", suffix=".sh") as tf:
-            launch_script_path = tf.name
+        tf = tempfile.NamedTemporaryFile(prefix="jaynes_launcher-", suffix=".sh", delete=False)
+        with open(tf.name, 'w') as f:
             script_name = os.path.basename(tf.name)
             # note: kill requires sudo
-            tf.write(self.launch_script + "\n"
-                                          f"sudo kill $(ps aux | grep '{script_name}' | awk '{{print $2}}')\n"
-                                          f"echo 'clean up all startup script processes'\n")
-            tf.flush()
-            upload_script, launch = ssh_remote_exec(username, ip_address, launch_script_path, pem=pem, sudo=sudo,
-                                                    remote_script_dir=script_dir)
-            if not dry:
-                if upload_script:
-                    # done: separate out the two commands
-                    ck(upload_script, verbose=verbose, shell=True)
-                if detached:
-                    import sys
-                    popen(launch, verbose=verbose, shell=True, stdout=sys.stdout, stderr=sys.stderr)
-                else:
-                    ck(launch, verbose=verbose, shell=True)
+            f.write(self.launch_script + "\n"
+                                         f"sudo kill $(ps aux | grep '{script_name}' | awk '{{print $2}}')\n"
+                                         f"echo 'clean up all startup script processes'\n")
+        tf.file.close()
 
-            elif verbose:
-                if upload_script:
-                    print(upload_script)
-                print(launch)
+        upload_script, launch = ssh_remote_exec(username, ip_address, tf.name, pem=pem, sudo=sudo,
+                                                remote_script_dir=script_dir)
+
+        if not dry:
+            if upload_script:
+                # done: separate out the two commands
+                ck(upload_script, verbose=verbose, shell=True)
+            if detached:
+                import sys
+                popen(launch, verbose=verbose, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+            else:
+                ck(launch, verbose=verbose, shell=True)
+
+        elif verbose:
+            if upload_script:
+                print(upload_script)
+            print(launch)
+
+        import time
+        time.sleep(0.1)
+        os.remove(tf.name)
+
 
     def launch_ec2(self, region, image_id, instance_type, key_name, security_group, spot_price=None,
                    iam_instance_profile_arn=None, verbose=False, dry=False):
