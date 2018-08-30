@@ -94,15 +94,8 @@ class Jaynes:
             aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=Name,Value={instance_tag}' --region {region}
             aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=exp_prefix,Value={instance_tag}' --region {region}
         """
-        # todo:
         install_aws_cli = f"""
-            rm -rf awscli-bundle
-            curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
-            yes A | unzip awscli-bundle.zip
-            echo "finished unziping the awscli bundle"
-            {"sudo " if sudo else ""}./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
-            echo "aws cli is installed"
-            rm -rf awscli-bundle
+            pip install awscli --upgrade --user
         """
         termination_script = f"""
             echo "Now terminate this instance"
