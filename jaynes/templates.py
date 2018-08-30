@@ -148,7 +148,7 @@ class S3UploadMount:
 
 class DockerRun:
     def __init__(self, docker_image, pypath="", docker_startup_scripts=None, docker_mount=None, cwd=None,
-                 name=None, use_gpu=False, ipc=None, tty=False):
+                 envs=None, name=None, use_gpu=False, ipc=None, tty=False):
         """
 
         :param docker_image:
@@ -156,6 +156,8 @@ class DockerRun:
         :param docker_startup_scripts:
         :param docker_mount:
         :param cwd:
+        :param envs: Set of environment key and variables, a string
+        :param name: Name of the docker container instance, use uuid if is None
         :param use_gpu:
         :type ipc: specify ipc for multiprocessing. Typically 'host'
         :param tty: almost never used. This is because when this script is ran, it is almost garanteed that the
@@ -176,7 +178,7 @@ class DockerRun:
         docker_container_name = name or uuid4()
         test_gpu = f"""
                 echo 'Testing nvidia-smi inside docker'
-                {docker_cmd} run --rm {docker_image} nvidia-smi
+                {envs if envs else ""} {docker_cmd} run --rm {docker_image} nvidia-smi
                 """
         remove_by_name = f"""
                 echo 'kill running instances'
@@ -190,7 +192,7 @@ class DockerRun:
                 {remove_by_name}
                 {docker_cmd} info
                 echo 'Now run docker'
-                {docker_cmd} run -i{"t" if tty else ""} {ipc_config}{docker_mount} --name '{docker_container_name}' \\
+                {envs if envs else ""} {docker_cmd} run -i{"t" if tty else ""} {ipc_config}{docker_mount} --name '{docker_container_name}' \\
                 {docker_image} /bin/bash -c '{cmd}'
                 """
 

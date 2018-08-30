@@ -1,0 +1,5 @@
+[
+  "tests/test_entry.py::test",
+  "tests/test_param_codec.py::test",
+  "tests/test_param_codec.py::test_empty"
+]
