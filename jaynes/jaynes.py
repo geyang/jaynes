@@ -141,7 +141,8 @@ class Jaynes:
 
         return self
 
-    def launch_ssh(self, ip_address, username="ubuntu", pem=None, script_dir=None, sudo=False, verbose=False, dry=False,
+    def launch_ssh(self, ip_address, port=None, username="ubuntu", pem=None, script_dir=None, sudo=False, verbose=False,
+                   dry=False,
                    detached=False):
         """
         run launch_script remotely by ip_address. First saves the run script locally as a file, then use
@@ -160,11 +161,11 @@ class Jaynes:
             script_name = os.path.basename(tf.name)
             # note: kill requires sudo
             f.write(self.launch_script + "\n"
-                                         f"sudo kill $(ps aux | grep '{script_name}' | awk '{{print $2}}')\n"
-                                         f"echo 'clean up all startup script processes'\n")
+            f"sudo kill $(ps aux | grep '{script_name}' | awk '{{print $2}}')\n"
+            f"echo 'clean up all startup script processes'\n")
         tf.file.close()
 
-        upload_script, launch = ssh_remote_exec(username, ip_address, tf.name, pem=pem, sudo=sudo,
+        upload_script, launch = ssh_remote_exec(username, ip_address, tf.name, port=port, pem=pem, sudo=sudo,
                                                 remote_script_dir=script_dir)
 
         if not dry:
@@ -185,7 +186,6 @@ class Jaynes:
         import time
         time.sleep(0.1)
         os.remove(tf.name)
-
 
     def launch_ec2(self, region, image_id, instance_type, key_name, security_group, spot_price=None,
                    iam_instance_profile_arn=None, verbose=False, dry=False):

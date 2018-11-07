@@ -170,11 +170,11 @@ class DockerRun:
         entry_script = "python -u -m jaynes.entry"
         docker_startup_scripts = docker_startup_scripts or ('yes | pip install jaynes awscli',)
         cmd = f"""echo "Running in docker{' (gpu)' if use_gpu else ''}";""" \
-              f"""{';'.join(docker_startup_scripts) + ';' if len(docker_startup_scripts) else ''}""" \
-              f"""export PYTHONPATH=$PYTHONPATH:{pypath};""" \
-              f"""{"cd '{}';".format(cwd) if cwd else ""}""" \
-              f"pwd;" \
-              f"""{JAYNES_PARAMS_KEY}={{encoded_thunk}} {entry_script}"""
+            f"""{';'.join(docker_startup_scripts) + ';' if len(docker_startup_scripts) else ''}""" \
+            f"""export PYTHONPATH=$PYTHONPATH:{pypath};""" \
+            f"""{"cd '{}';".format(cwd) if cwd else ""}""" \
+            f"pwd;" \
+            f"""{JAYNES_PARAMS_KEY}={{encoded_thunk}} {entry_script}"""
         docker_container_name = name or uuid4()
         test_gpu = f"""
                 echo 'Testing nvidia-smi inside docker'
@@ -202,7 +202,7 @@ class DockerRun:
         return self
 
 
-def ssh_remote_exec(user, ip_address, script_path, pem=None, sudo=True, remote_script_dir=None):
+def ssh_remote_exec(user, ip_address, script_path, port=None, pem=None, sudo=True, remote_script_dir=None):
     """
     run script remotely via ssh agent
 
@@ -210,6 +210,7 @@ def ssh_remote_exec(user, ip_address, script_path, pem=None, sudo=True, remote_s
     :param ip_address:
     :param pem:
     :param script_path:
+    :param port: default None, the port number
     :param sudo:
     :param remote_script_dir: path for the remote script to be scp'ed.
     :return:
@@ -217,6 +218,8 @@ def ssh_remote_exec(user, ip_address, script_path, pem=None, sudo=True, remote_s
     # cmd = f"""plink root@MachineB -m local_script.sh"""  # windows
     # options = "-o 'StrictHostKeyChecking=no' -o 'PasswordAuthentication=no' -o 'ChallengeResponseAuthentication=no'"
     options = "-o 'StrictHostKeyChecking=no'"
+    port_ = "" if port is None else f"-p {port}"
+    pem_ = f'-i {pem}' if pem else ''
     if sudo:
         # cmd = f"""ssh -o StrictHostKeyChecking=no {user}@{ip_address} {f'-i {pem} ' if pem else ''}'echo \"rootpass\" | sudo -Sv && bash -s' < {script_path}"""
         # solution found: https://stackoverflow.com/questions/44916319/how-to-sudo-run-a-local-script-over-ssh
@@ -225,10 +228,10 @@ def ssh_remote_exec(user, ip_address, script_path, pem=None, sudo=True, remote_s
         assert os.path.isabs(remote_script_dir), "remote_script_dir need to be absolute"
         remote_path = pathJoin(remote_script_dir, os.path.basename(script_path))
         send_file = \
-            f"""ssh {options} {user}@{ip_address} {f'-i {pem}' if pem else ''} 'mkdir -p {remote_script_dir}'\n""" \
-            f"""scp {f'-i {pem}' if pem else ''} {script_path} {user}@{ip_address}:{remote_script_dir}""",
-        launch = f"""ssh {options} {user}@{ip_address} {f'-i {pem}' if pem else ''} 'sudo -n -s bash {remote_path}'"""
+            f"""ssh {options} {user}@{ip_address} {port_} {pem_} 'mkdir -p {remote_script_dir}'\n""" \
+                f"""scp {port_} {pem_} {script_path} {user}@{ip_address}:{remote_script_dir}""",
+        launch = f"""ssh {options} {user}@{ip_address} {port_} {pem_} 'sudo -n -s bash {remote_path}'"""
         return send_file, launch
     else:
-        launch = f"""ssh {options} {user}@{ip_address} {f'-i {pem}' if pem else ''} 'bash -s' < {script_path}"""
+        launch = f"""ssh {options} {user}@{ip_address} {port_} {pem_} 'bash -s' < {script_path}"""
         return None, launch
