@@ -1,5 +1,4 @@
-<a href="figures/ETJaynes_defiant.jpg" target="_blank"><img src="figures/ETJaynes_defiant.jpg" alt="Defiant Jaynes" align="right" width="350px"></a>
-
+<a href="figures/ETJaynes_defiant.jpg" target="_blank"><img src="figures/ETJaynes_defiant.jpg" alt="Defiant Jaynes" align="right" width="350px" style="top:20px"></a>
 # Jaynes, A Utility for training ML models on AWS, GCE, SLURM, with or without docker
 
 ## Todo
