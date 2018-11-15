@@ -24,7 +24,37 @@ def tag_instance(Name=None, region="us-west-2", verbose=False, **kwargs):
 
 
 def is_interactive():
-    """pyCharm emulate terminal confuses this, show up as tty but then docker fails"""
+    """pyCharm emulate terminal confuses this, show up as tty but then runner fails"""
     import os
     import sys
     return os.isatty(sys.stdout.fileno())
+
+
+def get_home_dir():
+    """get the home directory on both PC and unix."""
+    from os.path import expanduser
+    home = expanduser("~")
+    return home
+
+
+def cwd_ancestors():
+    """generator returning the the current directory and ancestors one after another"""
+    import os
+    _ = os.path.abspath(os.getcwd())
+    while True:
+        yield _
+        parent = os.path.dirname(_)
+        if parent == _:
+            break
+        else:
+            _ = parent
+
+
+def pick(m, *keys):
+    """because they prefer verbosity."""
+    return {k: v for k, v in m.items() if k in keys}
+
+
+def omit(m, *keys):
+    """because guido sucks."""
+    return {k: v for k, v in m.items() if k not in keys}

@@ -15,6 +15,11 @@ pip install jaynes
 
 ## Usage (**Show me the Mo-NAY!! :moneybag::money_with_wings:**)
 
+Check out the example folder for projects that you can run.
+
+
+## Low-level Usage (Deprecated)
+
 Take a look at the folder [test_projects/](test_projects/)! These project scripts are used for test and development, so
 they should work out-of-the-box (if you have the right box ahem). 
 
@@ -33,7 +38,7 @@ J = Jaynes(
         templates.S3UploadMount(docker_abs=RUN.log_dir, s3_prefix=S3_PREFIX, local=RUN.log_dir, sync_s3=True)
     ],
 )
-J.set_docker(
+J.set_runner(
     docker=templates.DockerRun("python:3.6",
                                pypath=":".join([m.pypath for m in J.mounts if hasattr(m, "pypath") and m.pypath]),
                                docker_startup_scripts=("pip install cloudpickle",),
@@ -62,7 +67,7 @@ J = Jaynes(
         output_mount
     ],
 )
-J.set_docker(
+J.set_runner(
     docker=templates.DockerRun("python:3.6",
                                pypath=":".join([m.pypath for m in J.mounts if hasattr(m, "pypath") and m.pypath]),
                                docker_startup_scripts=("pip install cloudpickle",),
@@ -96,7 +101,7 @@ J = Jaynes(
         output_mount
     ],
 )
-J.set_docker(
+J.set_runner(
     docker=templates.DockerRun("python:3.6",
                                pypath=":".join([m.pypath for m in J.mounts if hasattr(m, "pypath") and m.pypath]),
                                docker_startup_scripts=("pip install cloudpickle",),

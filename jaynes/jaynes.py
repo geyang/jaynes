@@ -1,24 +1,26 @@
 import base64
+import glob
 import os
 import tempfile
-
 import uuid
 from textwrap import dedent
+from typing import Union
 
-from .helpers import get_temp_dir
-from .templates import ssh_remote_exec, DockerRun
+from .helpers import get_temp_dir, cwd_ancestors, omit, pick
+from .templates import ec2_terminate, ssh_remote_exec
+from .runners import Docker, Simple
 from .shell import ck, popen
 
 
 class Jaynes:
-    def __init__(self, launch_log=None, error_log=None, mounts=None, docker=None):
+    def __init__(self, mounts=None, runner=None, launch_log=None, error_log=None):
+        self.mounts = mounts or []
+        self.set_runner(runner)
         self.launch_log = launch_log or "jaynes_launch.log"
         self.error_log = error_log or "jaynes_launch.err.log"
-        self.mounts = mounts or []
-        self.set_docker(docker)
 
-    def set_docker(self, docker):
-        self.docker: DockerRun = docker
+    def set_runner(self, runner: Union[Docker, Simple]):
+        self.runner = runner
 
     def mount(self, *mounts):
         self.mounts.extend(mounts)
@@ -57,13 +59,12 @@ class Jaynes:
             
             # remote_setup
             {remote_setup}
+
             # upload_script
             {upload_script}
-            # sudo service docker start
-            # pull docker
-            docker pull {self.docker.docker_image}
-            # run docker
-            {self.docker.run_script}
+
+            {self.runner.setup_script}
+            {self.runner.run_script}
             
             # Now sleep before ending this script
             sleep {delay}
@@ -75,8 +76,19 @@ class Jaynes:
             ck(remote_script, shell=True)
         return self
 
-    def make_launch_script(self, log_dir, sudo=False, terminate_after_finish=False, delay=None,
+    def make_launch_script(self, log_dir, sudo=False, terminate_after=False, delay=None,
                            instance_tag=None, region=None):
+        """
+
+        :param log_dir: 
+        :param sudo:
+        :param terminate_after:
+        :param delay:
+        :param instance_tag:
+        :param region:
+        :return:
+        """
+        # fixit: this is a mistake.
         log_path = os.path.join(log_dir, self.launch_log)
         error_path = os.path.join(log_dir, self.error_log)
 
@@ -86,26 +98,22 @@ class Jaynes:
         remote_setup = "\n".join(
             [m.remote_setup for m in self.mounts if hasattr(m, "remote_setup") and m.remote_setup]
         )
+        if instance_tag:
+            assert len(instance_tag) <= 128, "Error: aws limits instance tag to 128 unicode characters."
 
-        assert len(instance_tag) <= 128, "Error: aws limits instance tag to 128 unicode characters."
-
-        tag_current_instance = f"""
-            EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
-            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=Name,Value={instance_tag}' --region {region}
-            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=exp_prefix,Value={instance_tag}' --region {region}
-        """
         install_aws_cli = f"""
-            pip install awscli --upgrade --user
+            if ! type aws > /dev/null; then
+                pip install awscli --upgrade --user
+            fi
         """
-        termination_script = f"""
-            echo "Now terminate this instance"
-            EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id || die "wget instance-id has failed: $?"`"
-            aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region {region}
+        tag_current_instance = f"""
+            if [ `cat /sys/devices/virtual/dmi/id/bios_version` == 1.0 ] || [ -f /sys/hypervisor/uuid ] && [ `head -c 3 /sys/hypervisor/uuid` == ec2 ]; then
+                echo "Is EC2 Instance"
+                EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
+                aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=Name,Value={instance_tag}' --region {region}
+                aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=exp_prefix,Value={instance_tag}' --region {region};
+            fi
         """
-        delay_script = f"""
-            # Now sleep before ending this script
-            sleep {delay}
-        """ if delay else ""
         # TODO: path.join is running on local computer, so it might not be quite right if remote is say windows.
         launch_script = f"""
         #!/bin/bash
@@ -117,9 +125,7 @@ class Jaynes:
             truncate -s 0 {log_path}
             truncate -s 0 {error_path}
             
-            die() {{ status=$1; shift; echo "FATAL: $*"; exit $status; }}
             {install_aws_cli}
-            
             export AWS_DEFAULT_REGION={region}
             {tag_current_instance if instance_tag else ""}
             
@@ -127,13 +133,14 @@ class Jaynes:
             {remote_setup}
             # upload_script
             {upload_script}
-            # {"sudo " if sudo else ""}service docker start
-            # pull docker
-            docker pull {self.docker.docker_image}
-            # run docker
-            {self.docker.run_script}
-            {delay_script}
-            {termination_script if terminate_after_finish else ""}
+
+            # todo: include this inside the runner script.
+            {self.runner.setup_script}
+            {self.runner.run_script}
+            {self.runner.post_script}
+
+            {ec2_terminate(region) if terminate_after else ""}
+
         }} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
         """
 
@@ -141,21 +148,23 @@ class Jaynes:
 
         return self
 
-    def launch_ssh(self, ip_address, port=None, username="ubuntu", pem=None, script_dir=None, sudo=False, verbose=False,
-                   dry=False,
-                   detached=False):
+    def launch_ssh(self, ip, port=None, username="ubuntu", pem=None, sudo=False,
+                   detached=True, dry=False, verbose=False):
         """
         run launch_script remotely by ip_address. First saves the run script locally as a file, then use
         scp to transfer the script to remote instance then run.
 
-        :param detached: use call instead of checkcall
-        :param ip_address:
+        :param sudo:
+        :param username:
+        :param ip:
+        :param port:
         :param pem:
-        :param verbose:
+        :param detached: use call instead of checkcall, allowing the python program to continue execution w/o
+                         blocking. Should the default.
         :param dry:
+        :param verbose:
         :return:
         """
-        script_dir = script_dir or f"/tmp/{uuid.uuid4()}"
         tf = tempfile.NamedTemporaryFile(prefix="jaynes_launcher-", suffix=".sh", delete=False)
         with open(tf.name, 'w') as f:
             script_name = os.path.basename(tf.name)
@@ -165,8 +174,7 @@ class Jaynes:
             f"echo 'clean up all startup script processes'\n")
         tf.file.close()
 
-        upload_script, launch = ssh_remote_exec(username, ip_address, tf.name, port=port, pem=pem, sudo=sudo,
-                                                remote_script_dir=script_dir)
+        upload_script, launch = ssh_remote_exec(username, ip, tf.name, port=port, pem=pem, sudo=sudo, )
 
         if not dry:
             if upload_script:
@@ -213,3 +221,87 @@ class Jaynes:
             if verbose:
                 print(response)
             return response
+
+    # aliases of launch scripts
+    local = run_local_setup
+    local_docker = run_local_setup
+    ssh = launch_ssh
+    ec2 = launch_ec2
+
+
+import yaml
+from . import mounts
+from . import runners
+
+
+class RUN:
+    J = None
+    run_config = None
+
+
+def config(path=None, mode=None):
+    RUN.mode = mode
+    if RUN.J is None:
+        if path is None:
+            print('searching for config file')
+            for d in cwd_ancestors():
+                _ = glob.glob(d + "/jaynes.yml")
+                if _:
+                    break
+            path = _[0]
+
+        for k, c in mounts.__dict__.items():
+            if hasattr(c, 'from_yaml'):
+                yaml.SafeLoader.add_constructor("!mounts." + k, c.from_yaml)
+        for k, c in runners.__dict__.items():
+            if hasattr(c, 'from_yaml'):
+                yaml.SafeLoader.add_constructor("!runners." + k, c.from_yaml)
+
+        with open(path, 'r') as f:
+            raw = yaml.safe_load(f)
+
+        # order or precendence: mode -> run -> root
+        RUN.config = omit(raw, 'run')
+        if 'run' in raw:
+            RUN.config.update(raw['run'])
+        RUN.J = Jaynes(**pick(RUN.config, 'launch_log', 'error_log', 'mounts'))
+        RUN.J.run_local_setup(verbose=raw.get('verbose'))
+
+
+def run(fn, *args, **kwargs):
+    from copy import deepcopy
+    if not RUN.J:
+        config()
+
+    if not RUN.mode or RUN.mode == "local":
+        return fn(*args, **kwargs)
+    else:
+        run_config = deepcopy(omit(RUN.config, 'modes'))
+        run_config.update(RUN.config['modes'][RUN.mode])
+
+    # config.RUNNER
+    Runner, runner_kwargs = run_config.get('runner')
+    context = run_config.copy()
+
+    _ = {k: v.format(**context) if type(v) is str else v for k, v in runner_kwargs.items()}
+
+    j = deepcopy(RUN.J)
+    j.set_runner(Runner(**_, pypath=":".join([m.container_path for m in run_config['mounts'] if m.pypath]),
+                        mount=" ".join([m.docker_mount for m in run_config['mounts']]), ))
+    j.runner.run(fn, *args, **kwargs)
+
+    # config.HOST
+    j.make_launch_script(log_dir="~/debug-outputs", **run_config.get('host', {}))
+
+    if run_config.get('verbose'):
+        print(j.launch_script)
+
+    # config.LAUNCH
+    launch_config = run_config['launch']
+    getattr(j, launch_config['type'])(**omit(launch_config, 'type'))
+
+def listen():
+    """Just a for-loop, to keep ths process connected to the ssh session"""
+    import time
+    while True:
+        time.sleep(10)

@@ -7,7 +7,7 @@ with open(path.join(path.abspath(path.dirname(__file__)), 'VERSION'), encoding='
     version = f.read()
 
 setup(name="jaynes",
-      description="A tool for running python code with docker on aws",
+      description="A tool for running python code with runner on aws",
       long_description=long_description,
       version=version,
       url="https://github.com/episodeyang/jaynes",
