@@ -58,3 +58,15 @@ def pick(m, *keys):
 def omit(m, *keys):
     """because guido sucks."""
     return {k: v for k, v in m.items() if k not in keys}
+
+
+def n_to_m(yaml_node):
+    return {k.value: v.value for k, v in yaml_node.value}
+
+
+def hydrate(fn, ctx):
+    def _fn(_, node):
+        return fn(**{k.value: v.value.format(**ctx) if type(v.value) is str else v.value
+                   for k, v in node.value})
+
+    return _fn

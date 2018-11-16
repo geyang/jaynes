@@ -1,6 +1,4 @@
 version: 0
-launch_log: /home/ubuntu/jaynes-launch.log
-error_log: /home/ubuntu/jaynes-launch.err.log
 cloud:
   ec2: &ec2 # missing profile/credential selection
     region: us-west-2
@@ -11,15 +9,23 @@ cloud:
     spot_price: 0.6
     iam_instance_profile_arn: arn:aws:iam::055406702465:instance-profile/main
 
-mounts: # mount configurations
+mounts: # mount configurations Available keys: NOW, UUID,
   - !mounts.S3Code &code_mount
     s3_prefix: s3://ge-bair/jaynes-debug
     local_path: .
-    host_path: /global/geyang/
-    container_path: /Users/geyang/learning-to-learn
+    host_path: /tmp/jaynes-mounts/{NOW:%Y-%m-%d}-{NOW:%H%M%S.%f}
+    # container_path: /Users/geyang/learning-to-learn
     pypath: true
     excludes: "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info' --exclude='*.pkl'"
     compress: true
+  - !mounts.S3Code &fair_code_mount
+    s3_prefix: s3://ge-bair/jaynes-debug
+    local_path: .
+    host_path: /private/home/geyang/learning-to-learn/{NOW:%Y-%m-%d}-{NOW:%H%M%S.%f}
+    pypath: true
+    excludes: "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info' --exclude='*.pkl'"
+    compress: true
+
 hosts:
   berkekley: &savio
     ip: localhost
@@ -59,7 +65,7 @@ runners:
     time_limit: "0:0:20"
     n_cpu: 40
     n_gpu: 0
-    launch_directory: "{mounts[0].container_path}"
+    launch_directory: "{mounts[0].host_path}"
   - !runners.Slurm &lnl_slurm
     startup: >-
       source /etc/profile;
@@ -75,16 +81,22 @@ runners:
 
 modes: # todo: add support to modes.
   oberyn:
+    mounts:
+      - *code_mount
     runner: *ssh_docker
     launch:
       type: ssh
       <<: *oberyn
   hodor:
+    mounts:
+      - *code_mount
     runner: *ssh_docker
     launch:
       type: ssh
       <<: *hodor
   ec2:
+    mounts:
+      - *code_mount
     runner: *ssh_docker
     host:
       terminate_after: true
@@ -92,16 +104,23 @@ modes: # todo: add support to modes.
       type: ec2
       <<: *ec2
   fair:
+    mounts:
+      - *fair_code_mount
     runner: *fair_slurm
     launch:
       type: ssh
       <<: *dev_fair
+    # the problem: we need to use the correct logging files
+    launch_log: /private/home/geyang/jaynes-launch.log
+    launch_error: /private/home/geyang/jaynes-launch.err.log
   savio:
+    mounts:
+      - *fair_code_mount
     runner: *lnl_slurm
     launch:
       type: ssh
       <<: *savio
-run:  # this is specific to each launch, and is dynamically overwritten in-memory
-  mounts:
-    - *code_mount
+#run:  # this is specific to each launch, and is dynamically overwritten in-memory
+#  mounts:
+#    - *code_mount
 verbose: true

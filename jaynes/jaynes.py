@@ -6,39 +6,41 @@ import uuid
 from textwrap import dedent
 from typing import Union
 
-from .helpers import get_temp_dir, cwd_ancestors, omit, pick
+from .helpers import get_temp_dir, cwd_ancestors, omit, pick, n_to_m, hydrate
 from .templates import ec2_terminate, ssh_remote_exec
 from .runners import Docker, Simple
 from .shell import ck, popen
 
 
 class Jaynes:
-    def __init__(self, mounts=None, runner=None, launch_log=None, error_log=None):
+    def __init__(self, mounts=None, runner=None):
         self.mounts = mounts or []
         self.set_runner(runner)
-        self.launch_log = launch_log or "jaynes_launch.log"
-        self.error_log = error_log or "jaynes_launch.err.log"
 
     def set_runner(self, runner: Union[Docker, Simple]):
         self.runner = runner
 
-    def mount(self, *mounts):
-        self.mounts.extend(mounts)
+    def set_mount(self, *mounts):
+        self.mounts = mounts
 
-    def run_local_setup(self, verbose=False, dry=False):
-        cmd = '\n'.join([m.local_script for m in self.mounts if hasattr(m, "local_script") and m.local_script])
-        if dry:
-            return cmd
-        else:
-            ck(cmd, verbose=verbose, shell=True)
-            return self
+    _uploaded = []
 
-    def launch_local_docker(self, log_dir=None, delay=None, verbose=False, dry=False):
+    def upload_mount(self, verbose=None):
+        for mount in self.mounts:
+            if mount in self._uploaded:
+                print('this package is already uploaded')
+            else:
+                self._uploaded.append(mount)
+                ck(mount.local_script, verbose=verbose, shell=True)
+
+    # def run_local_setup(self, verbose=False):
+    #     for m in self.mounts:
+    #         self.upload_mount(m)
+
+    def launch_local_docker(self, log_dir="/tmp/jaynes-mount", delay=None, verbose=False, dry=False):
         # the log_dir is primarily used for the run script. Therefore it should use ued here instead.
-        if log_dir is None:
-            log_dir = get_temp_dir()  # this is always absolute
-        log_path = os.path.join(log_dir, self.launch_log)
-        error_path = os.path.join(log_dir, self.error_log)
+        log_path = os.path.join(log_dir, "jaynes-launch.log")
+        error_path = os.path.join(log_dir, "jaynes-launch.err.log")
 
         upload_script = '\n'.join(
             [m.upload_script for m in self.mounts if hasattr(m, "upload_script") and m.upload_script]
@@ -88,15 +90,14 @@ class Jaynes:
         :param region:
         :return:
         """
-        # fixit: this is a mistake.
-        log_path = os.path.join(log_dir, self.launch_log)
-        error_path = os.path.join(log_dir, self.error_log)
+        log_path = os.path.join(log_dir, "jaynes-launch.log")
+        error_path = os.path.join(log_dir, "jaynes-launch.err.log")
 
         upload_script = '\n'.join(
             [m.upload_script for m in self.mounts if hasattr(m, "upload_script") and m.upload_script]
         )
         remote_setup = "\n".join(
-            [m.remote_setup for m in self.mounts if hasattr(m, "remote_setup") and m.remote_setup]
+            [m.host_setup for m in self.mounts if hasattr(m, "host_setup") and m.host_setup]
         )
         if instance_tag:
             assert len(instance_tag) <= 128, "Error: aws limits instance tag to 128 unicode characters."
@@ -126,7 +127,6 @@ class Jaynes:
             truncate -s 0 {error_path}
             
             {install_aws_cli}
-            export AWS_DEFAULT_REGION={region}
             {tag_current_instance if instance_tag else ""}
             
             # remote_setup
@@ -138,8 +138,7 @@ class Jaynes:
             {self.runner.setup_script}
             {self.runner.run_script}
             {self.runner.post_script}
-
-            {ec2_terminate(region) if terminate_after else ""}
+            {ec2_terminate(region, delay) if terminate_after else ""}
 
         }} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
         """
@@ -223,8 +222,7 @@ class Jaynes:
             return response
 
     # aliases of launch scripts
-    local = run_local_setup
-    local_docker = run_local_setup
+    local_docker = launch_local_docker
     ssh = launch_ssh
     ec2 = launch_ec2
 
@@ -235,8 +233,12 @@ from . import runners
 
 
 class RUN:
+    raw = None
     J = None
-    run_config = None
+    config = None
+
+
+from datetime import datetime
 
 
 def config(path=None, mode=None):
@@ -250,9 +252,16 @@ def config(path=None, mode=None):
                     break
             path = _[0]
 
+        from datetime import datetime
+        from uuid import uuid4
+        from inspect import isclass
+
+        ctx = dict(NOW=datetime.now(), UUID=uuid4())
+
         for k, c in mounts.__dict__.items():
-            if hasattr(c, 'from_yaml'):
-                yaml.SafeLoader.add_constructor("!mounts." + k, c.from_yaml)
+            if isclass(c):
+                yaml.SafeLoader.add_constructor("!mounts." + k, hydrate(c, ctx), )
+
         for k, c in runners.__dict__.items():
             if hasattr(c, 'from_yaml'):
                 yaml.SafeLoader.add_constructor("!runners." + k, c.from_yaml)
@@ -261,11 +270,18 @@ def config(path=None, mode=None):
             raw = yaml.safe_load(f)
 
         # order or precendence: mode -> run -> root
-        RUN.config = omit(raw, 'run')
-        if 'run' in raw:
-            RUN.config.update(raw['run'])
-        RUN.J = Jaynes(**pick(RUN.config, 'launch_log', 'error_log', 'mounts'))
-        RUN.J.run_local_setup(verbose=raw.get('verbose'))
+        RUN.raw = raw
+        RUN.J = Jaynes()
+
+    if mode:
+        RUN.config = RUN.raw.copy()
+        modes = RUN.raw.get('modes', {})
+        RUN.config.update(modes[mode])
+    else:
+        RUN.config.update(RUN.raw.get('run', {}))
+
+    RUN.J.set_mount(*RUN.config.get("mounts"))
+    RUN.J.upload_mount(verbose=RUN.config.get('verbose'))
 
 
 def run(fn, *args, **kwargs):
@@ -275,33 +291,31 @@ def run(fn, *args, **kwargs):
 
     if not RUN.mode or RUN.mode == "local":
         return fn(*args, **kwargs)
-    else:
-        run_config = deepcopy(omit(RUN.config, 'modes'))
-        run_config.update(RUN.config['modes'][RUN.mode])
 
     # config.RUNNER
-    Runner, runner_kwargs = run_config.get('runner')
-    context = run_config.copy()
+    Runner, runner_kwargs = RUN.config.get('runner')
+    context = RUN.config.copy()
 
     _ = {k: v.format(**context) if type(v) is str else v for k, v in runner_kwargs.items()}
 
     j = deepcopy(RUN.J)
-    j.set_runner(Runner(**_, pypath=":".join([m.container_path for m in run_config['mounts'] if m.pypath]),
-                        mount=" ".join([m.docker_mount for m in run_config['mounts']]), ))
+    j.set_runner(Runner(**_, pypath=":".join([m.container_path for m in RUN.config['mounts'] if m.pypath]),
+                        mount=" ".join([m.docker_mount for m in RUN.config['mounts']]), ))
     j.runner.run(fn, *args, **kwargs)
 
     # config.HOST
-    j.make_launch_script(log_dir="~/debug-outputs", **run_config.get('host', {}))
+    j.make_launch_script(log_dir="~/debug-outputs", **RUN.config.get('host', {}))
 
-    if run_config.get('verbose'):
+    if RUN.config.get('verbose'):
         print(j.launch_script)
 
     # config.LAUNCH
-    launch_config = run_config['launch']
+    launch_config = RUN.config['launch']
     getattr(j, launch_config['type'])(**omit(launch_config, 'type'))
+
 
 def listen():
     """Just a for-loop, to keep ths process connected to the ssh session"""
-    import time
+    import math, time
     while True:
-        time.sleep(10)
+        time.sleep(math.pi)

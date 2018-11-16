@@ -6,10 +6,6 @@ from os.path import join as pathJoin
 
 
 class Simple:
-    @classmethod
-    def from_yaml(cls, _, node):
-        return cls(**{k.value: v.value for k, v in node.value})
-
     def __init__(self, host_path, container_path, pypath=False):
         """Mount a directory from the remote host to docker"""
         # host_path = remote if os.path.isabs(remote) else pathJoin(self.remote_cwd, remote)
@@ -22,10 +18,6 @@ class Simple:
 
 
 class S3Code:
-    @classmethod
-    def from_yaml(cls, _, node):
-        return cls(**{k.value: v.value for k, v in node.value})
-
     def __init__(self, *, s3_prefix, local_path, host_path=None, remote_tar=None, container_path=None, pypath=False,
                  excludes=None, file_mask=None, name=None, compress=True, public=True, no_signin=True):
         """
@@ -61,7 +53,6 @@ class S3Code:
                 mkdir -p '{self.temp_dir}'
                 # Do not use absolute path in tar.
                 tar {excludes} -c{"z" if compress else ""}f '{local_tar}' -C '{local_abs}' {file_mask}
-                echo "uploading to s3"
                 # aws s3 cp '{local_tar}' '{s3_prefix}/{tar_name}' --only-show-errors
                 aws s3 cp '{local_tar}' '{s3_prefix}/{tar_name}' {'--acl public-read-write' if public else ''}
                 """
@@ -78,10 +69,6 @@ class S3Code:
 
 
 class S3Output:
-    @staticmethod
-    def from_yaml(_, node):
-        return S3Output(**{k.value: v.value for k, v in node.value})
-
     def __init__(self, *, container_path, s3_prefix, host_path=None, name=None, local_path=None, interval=15,
                  pypath=False, sync_s3=True):
         """
@@ -154,7 +141,3 @@ class S3Output:
         self.docker_mount = f"-v '{host_path}':'{container_path}'"
         self.container_path = container_path
         self.pypath = pypath
-
-    @classmethod
-    def from_yaml(cls, _, node):
-        return cls(**{k.value: v.value for k, v in node.value})

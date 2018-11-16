@@ -1,7 +1,8 @@
 import os
 from os.path import join as pathJoin
 
-ec2_terminate = lambda region: f"""
+ec2_terminate = lambda region, delay: f"""
+            sleep {delay or 0}
             die() {{ status=$1; shift; echo "FATAL: $*"; exit $status; }}
             echo "Now terminate this instance"
             EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id || die "wget instance-id has failed: $?"`"

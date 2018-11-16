@@ -93,8 +93,7 @@ class Docker:
         return cls, {k.value: v.value for k, v in node.value}
 
     def __init__(self, *, image, work_directory=None, launch_directory=None, startup=STARTUP, mount=None,
-                 pypath=None, envs=None, name=None, use_gpu=False, ipc=None, tty=False, terminate_after=False,
-                 termination_delay=None):
+                 pypath=None, envs=None, name=None, use_gpu=False, ipc=None, tty=False, ):
         """
 
         :param image:
@@ -111,7 +110,7 @@ class Docker:
                     ssh/bash session is not going to be tty.
         """
         self.setup_script = f"""
-            service docker start
+            sudo service docker start # this is optional.
             docker pull {image}
         """
         self.docker_image = image
