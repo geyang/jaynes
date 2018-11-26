@@ -14,8 +14,9 @@ pip install jaynes
 
 ## Usage (**Show me the Mo-NAY!! :moneybag::money_with_wings:**)
 
-Check out the example folder for projects that you can run.
+Check out the [test_projects](./test_projects) folder for projects that you can run. I just recenlty implemented a hugely improved API that uses a static `yaml` configuration file, so the documentations are still comming.
 
+To try to get things to work via ssh/slurm/aws, see [test_projects](./test_projects).
 
 ## To Develop
 
