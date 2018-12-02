@@ -17,21 +17,26 @@ class Slurm:
     def from_yaml(cls, _, node):
         return cls, {k.value: v.value for k, v in node.value}
 
-    def __init__(self, pypath="", startup=STARTUP, mount=None, launch_directory=None, envs=None, n_gpu=None,
-                 partition="dev", time_limit="5", n_cpu=4, ):
+    def __init__(self, pypath="", setup="", startup=STARTUP, mount=None, launch_directory=None, envs=None, n_gpu=None,
+                 partition="dev", time_limit="5", n_cpu=4, comment=""):
         launch_directory = launch_directory or os.getcwd()
         entry_script = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}} python -u -m jaynes.entry"
-        cmd = f"/bin/bash -l -c '{entry_script}'"
-        slurm_cmd = f"srun --gres=gpu:{n_gpu or 0} --partition={partition} --time={time_limit} " \
-            f"--cpus-per-task {n_cpu} {cmd}"
-        cmd = f"""printf "\\e[1;34m%-6s\\e[m" "Running on slurm cluster";"""
-        cmd += (startup.strip() + ';') if startup else ''
-        cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath};"
+        # --get-user-env
+        setup_cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running on login-node"\n"""
+        setup_cmd += (setup.strip() + '\n') if setup else ''
+        setup_cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath}\n"
+
+        cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker";"""
+        cmd += (startup.strip() + ";") if startup else ""
         cmd += f"""{"cd '{}';".format(launch_directory) if launch_directory else ""}"""
-        cmd += f"pwd; {slurm_cmd}"
+
+        slurm_cmd = f"srun --gres=gpu:{n_gpu or 0} --partition={partition} --time={time_limit} " \
+            f"--cpus-per-task {n_cpu} --comment='{comment}' /bin/bash -l -c '{cmd} {entry_script}'"
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""
-                {envs if envs else ""} {cmd}
+                {envs if envs else ""} 
+                {setup_cmd}
+                {slurm_cmd}
                 """
 
     def run(self, fn, *args, **kwargs):
@@ -62,7 +67,7 @@ class Simple:
         """
         launch_directory = launch_directory or os.getcwd()
         entry_script = "python -u -m jaynes.entry"
-        cmd = f"""printf "\\e[1;34m%-6s\\e[m" "Running on cluster{' (gpu)' if use_gpu else ''}";"""
+        cmd = f"""printf "\\e[1;34m%-6s\\e[m" "Running on cluster{' (gpu)' if use_gpu else ''}"\n;"""
         cmd += (startup.strip() + ';') if startup else ''
         cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath};"
         cmd += f"""{"cd '{}';".format(launch_directory) if launch_directory else ""}"""
@@ -110,8 +115,8 @@ class Docker:
                     ssh/bash session is not going to be tty.
         """
         self.setup_script = f"""
-            sudo service docker start # this is optional.
-            docker pull {image}
+            # sudo service docker start # this is optional.
+            # docker pull {image}
         """
         self.docker_image = image
         docker_cmd = "nvidia-docker" if use_gpu else "docker"
@@ -138,7 +143,6 @@ class Docker:
         self.run_script_thunk = f"""
                 {test_gpu if use_gpu else "" }
                 {remove_by_name}
-                {envs if envs else ""} {docker_cmd} info
                 echo 'Now run docker'
                 {envs if envs else ""} {docker_cmd} run -i{"t" if tty else ""} {wd_config} {ipc_config} {mount} --name '{docker_container_name}' \\
                 {image} /bin/bash -c '{cmd}'

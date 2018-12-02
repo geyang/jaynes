@@ -2,11 +2,10 @@ import base64
 import glob
 import os
 import tempfile
-import uuid
 from textwrap import dedent
 from typing import Union
 
-from .helpers import get_temp_dir, cwd_ancestors, omit, pick, n_to_m, hydrate
+from .helpers import cwd_ancestors, omit, hydrate
 from .templates import ec2_terminate, ssh_remote_exec
 from .runners import Docker, Simple
 from .shell import ck, popen
@@ -78,7 +77,7 @@ class Jaynes:
             ck(remote_script, shell=True)
         return self
 
-    def make_launch_script(self, log_dir, sudo=False, terminate_after=False, delay=None,
+    def make_launch_script(self, log_dir, setup=None, terminate_after=False, delay=None,
                            instance_tag=None, region=None):
         """
 
@@ -102,13 +101,18 @@ class Jaynes:
         if instance_tag:
             assert len(instance_tag) <= 128, "Error: aws limits instance tag to 128 unicode characters."
 
-        install_aws_cli = f"""
+        setup = setup or f"""
             if ! type aws > /dev/null; then
                 pip install awscli --upgrade --user
             fi
         """
+        if instance_tag:
+            assert region, "region need to be specified if instance tag is given."
+        if terminate_after:
+            assert region, "region need to be specified if instance is self-terminating."
+
         tag_current_instance = f"""
-            if [ `cat /sys/devices/virtual/dmi/id/bios_version` == 1.0 ] || [ -f /sys/hypervisor/uuid ] && [ `head -c 3 /sys/hypervisor/uuid` == ec2 ]; then
+            if [ `cat /sys/devices/virtual/dmi/id/bios_version` == 1.0 ] || [[ -f /sys/hypervisor/uuid && `head -c 3 /sys/hypervisor/uuid` == ec2 ]]; then
                 echo "Is EC2 Instance"
                 EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
                 aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=Name,Value={instance_tag}' --region {region}
@@ -126,7 +130,7 @@ class Jaynes:
             truncate -s 0 {log_path}
             truncate -s 0 {error_path}
             
-            {install_aws_cli}
+            {setup}
             {tag_current_instance if instance_tag else ""}
             
             # remote_setup
@@ -228,29 +232,35 @@ class Jaynes:
 
 
 import yaml
-from . import mounts
-from . import runners
+from termcolor import cprint
+from . import mounts, runners
 
 
 class RUN:
+    project_root = None
     raw = None
-    J = None
+    J: Jaynes = None
     config = None
 
 
 from datetime import datetime
 
 
-def config(path=None, mode=None):
+def config(path=None, mode=None, runner=None, host=None, launch=None, **ext):
     RUN.mode = mode
     if RUN.J is None:
         if path is None:
-            print('searching for config file')
             for d in cwd_ancestors():
-                _ = glob.glob(d + "/jaynes.yml")
-                if _:
+                try:
+                    path, = glob.glob(d + "/jaynes.yml")
                     break
-            path = _[0]
+                except Exception:
+                    pass
+        if path is None:
+            cprint('No `jaynes.yml` is found. Run `jaynes.init` to create a configuration file.', "red")
+            return
+
+        RUN.project_root = os.path.dirname(path)
 
         from datetime import datetime
         from uuid import uuid4
@@ -273,49 +283,84 @@ def config(path=None, mode=None):
         RUN.raw = raw
         RUN.J = Jaynes()
 
-    if mode:
-        RUN.config = RUN.raw.copy()
+    RUN.config = RUN.raw.copy()
+    if mode == 'local':
+        cprint("running local mode", "green")
+        return
+
+    elif not mode:
+        RUN.config.update(RUN.raw.get('run', {}))
+    else:
         modes = RUN.raw.get('modes', {})
         RUN.config.update(modes[mode])
-    else:
-        RUN.config.update(RUN.raw.get('run', {}))
 
+    if runner:
+        Runner, runner_config = RUN.config['runner']
+        updated = runner_config.copy()
+        updated.update(runner)
+        RUN.config['runner'] = Runner, updated
+
+    if launch:
+        updated = RUN.config['launch']
+        updated.update(launch)
+        RUN.config["launch"] = updated
+
+    if host:
+        updated = RUN.config['host']
+        updated.update(host)
+        RUN.config["host"] = updated
+
+    RUN.config.update(ext)
     RUN.J.set_mount(*RUN.config.get("mounts"))
     RUN.J.upload_mount(verbose=RUN.config.get('verbose'))
 
 
 def run(fn, *args, **kwargs):
     from copy import deepcopy
+    from types import SimpleNamespace
     if not RUN.J:
         config()
 
-    if not RUN.mode or RUN.mode == "local":
+    if RUN.mode == "local":
         return fn(*args, **kwargs)
 
     # config.RUNNER
     Runner, runner_kwargs = RUN.config.get('runner')
     context = RUN.config.copy()
+    context['PYPATHS'] = SimpleNamespace(
+        host=":".join([m.host_path for m in RUN.config['mounts'] if m.pypath]),
+        container=":".join([m.container_path for m in RUN.config['mounts'] if m.pypath]))
+    context['CWD'] = os.getcwd()
+    # todo: mapping current work directory correction on the remote instance.
 
     _ = {k: v.format(**context) if type(v) is str else v for k, v in runner_kwargs.items()}
+    if 'launch_directory' not in _:
+        _['launch_directory'] = os.getcwd()
 
     j = deepcopy(RUN.J)
-    j.set_runner(Runner(**_, pypath=":".join([m.container_path for m in RUN.config['mounts'] if m.pypath]),
-                        mount=" ".join([m.docker_mount for m in RUN.config['mounts']]), ))
+    j.set_runner(Runner(**_, mount=" ".join([m.docker_mount for m in RUN.config['mounts']]), ))
     j.runner.run(fn, *args, **kwargs)
 
     # config.HOST
-    j.make_launch_script(log_dir="~/debug-outputs", **RUN.config.get('host', {}))
+    host_config = RUN.config.get('host', {})
+    j.make_launch_script(log_dir="~/debug-outputs", **host_config)
 
     if RUN.config.get('verbose'):
         print(j.launch_script)
 
     # config.LAUNCH
     launch_config = RUN.config['launch']
-    getattr(j, launch_config['type'])(**omit(launch_config, 'type'))
+    _ = getattr(j, launch_config['type'])(**omit(launch_config, 'type'))
+    if RUN.config.get('verbose'):
+        cprint("lauched!", "green")
 
 
-def listen():
+def listen(timeout=None):
     """Just a for-loop, to keep ths process connected to the ssh session"""
     import math, time
+    t0 = time.time()
     while True:
         time.sleep(math.pi)
+        if timeout and (time.time() - t0) > timeout:
+            cprint(f'jaynes.listen(timeout={timeout}) is now timed out', 'green')
+            break

@@ -1,5 +1,3 @@
-import os
-import tempfile
 
 
 def path_no_ext(path):
@@ -8,6 +6,7 @@ def path_no_ext(path):
 
 def get_temp_dir():
     """returns a temporal directory. Mac OSX /val is a symbolic link, which is why we return the resolved path."""
+    import os, tempfile
     tmp_dir = tempfile.mkdtemp()
     return os.path.realpath(tmp_dir)
 
@@ -70,3 +69,4 @@ def hydrate(fn, ctx):
                    for k, v in node.value})
 
     return _fn
+

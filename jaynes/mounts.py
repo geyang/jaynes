@@ -1,7 +1,7 @@
 import os
 from uuid import uuid4
 
-from jaynes.helpers import get_temp_dir
+from .helpers import get_temp_dir
 from os.path import join as pathJoin
 
 
@@ -41,15 +41,17 @@ class S3Code:
         tar_name = f"{name}.tar"
         self.temp_dir = get_temp_dir()
         local_tar = pathJoin(self.temp_dir, tar_name)
-        # assert os.path.isabs(local_path), 'local_path path must be absolute, resolved outside.'
-        local_abs = os.path.abspath(local_path)
+        from .jaynes import RUN
+        local_abs = os.path.join(RUN.project_root, local_path)
         if host_path:
             assert os.path.isabs(host_path), "host_path path has to be absolute"
         else:
             host_path = f"/tmp/{name}"
-        docker_abs = os.path.abspath(container_path) if container_path else local_abs
+
+        from .jaynes import RUN
+        docker_abs = os.path.join(RUN.project_root, container_path) if container_path else local_abs
         self.local_script = f"""
-                pwd &&
+                type gtar >/dev/null 2>&1 && alias tar=`which gtar`
                 mkdir -p '{self.temp_dir}'
                 # Do not use absolute path in tar.
                 tar {excludes} -c{"z" if compress else ""}f '{local_tar}' -C '{local_abs}' {file_mask}

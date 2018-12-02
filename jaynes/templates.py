@@ -1,7 +1,7 @@
 import os
 from os.path import join as pathJoin
 
-ec2_terminate = lambda region, delay: f"""
+ec2_terminate = lambda region, delay=30: f"""
             sleep {delay or 0}
             die() {{ status=$1; shift; echo "FATAL: $*"; exit $status; }}
             echo "Now terminate this instance"

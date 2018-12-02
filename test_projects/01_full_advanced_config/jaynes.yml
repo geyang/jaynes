@@ -13,7 +13,7 @@ mounts: # mount configurations Available keys: NOW, UUID,
   - !mounts.S3Code &code_mount
     s3_prefix: s3://ge-bair/jaynes-debug
     local_path: .
-    host_path: /tmp/jaynes-mounts/{NOW:%Y-%m-%d}-{NOW:%H%M%S.%f}
+    host_path: /home/ubuntu/jaynes-mounts/{NOW:%Y-%m-%d}/{NOW:%H%M%S.%f}
     # container_path: /Users/geyang/learning-to-learn
     pypath: true
     excludes: "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info' --exclude='*.pkl'"
@@ -21,7 +21,7 @@ mounts: # mount configurations Available keys: NOW, UUID,
   - !mounts.S3Code &fair_code_mount
     s3_prefix: s3://ge-bair/jaynes-debug
     local_path: .
-    host_path: /private/home/geyang/learning-to-learn/{NOW:%Y-%m-%d}-{NOW:%H%M%S.%f}
+    host_path: /private/home/geyang/jaynes-mounts/{NOW:%Y-%m-%d}/{NOW:%H%M%S.%f}
     pypath: true
     excludes: "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info' --exclude='*.pkl'"
     compress: true
@@ -51,33 +51,40 @@ runners:
     image: "episodeyang/super-expert"
     startup: yes | pip install jaynes ml-logger -q
     envs: "LANG=utf-8"
+    pypath: "{mounts[0].container_path}"
     launch_directory: "{mounts[0].container_path}"
     ipc: host
     use_gpu: false
   - !runners.Slurm &fair_slurm
+    envs: >-
+      LD_LIBRARY_PATH=/public/apps/anaconda3/5.0.1/lib:/private/home/geyang/.mujoco/mjpro150/bin::/public/slurm/17.11.4/lib
     startup: >-
       source /etc/profile;
       source ~/.profile;
       module load anaconda3/5.0.1;
-      source activate playground
-    envs: "LC_CTYPE=en_US.UTF-8 LANG=en_US.UTF-8 LANGUAGE=en_US SSH_TTY=/dev/pts/1 TERM=xterm-256color"
+      source activate playground;
+      export LC_CTYPE=en_US.UTF-8
+    # cd {mounts[0].host_path} && pip install -e . -q
+    pypath: "{mounts[0].host_path}/rl:{mounts[0].host_path}/imitation:{mounts[0].host_path}/rl_maml_tf"
+    launch_directory: "{mounts[0].host_path}"
     partition: "dev,priority,uninterrupted"
     time_limit: "0:0:20"
     n_cpu: 40
     n_gpu: 0
-    launch_directory: "{mounts[0].host_path}"
   - !runners.Slurm &lnl_slurm
+    envs: "LC_CTYPE=en_US.UTF-8 LANG=en_US.UTF-8 LANGUAGE=en_US SSH_TTY=/dev/pts/1 TERM=xterm-256color"
     startup: >-
       source /etc/profile;
       source ~/.profile;
       module load anaconda3/5.0.1;
-      source activate playground
-    envs: "LC_CTYPE=en_US.UTF-8 LANG=en_US.UTF-8 LANGUAGE=en_US SSH_TTY=/dev/pts/1 TERM=xterm-256color"
+      source activate playground;
+      export LC_CTYPE=en_US.UTF-8
+    pypath: "{mounts[0].host_path}/rl:{mounts[0].host_path}/imitation:{mounts[0].host_path}/rl_maml_tf"
+    launch_directory: "{mounts[0].host_path}"
     partition: "" # not clear what the partition is like
     time_limit: "0:0:20"
     n_cpu: 40
     n_gpu: 0
-    launch_directory: "{mounts[0].container_path}"
 
 modes: # todo: add support to modes.
   oberyn:
@@ -120,7 +127,3 @@ modes: # todo: add support to modes.
     launch:
       type: ssh
       <<: *savio
-#run:  # this is specific to each launch, and is dynamically overwritten in-memory
-#  mounts:
-#    - *code_mount
-verbose: true
