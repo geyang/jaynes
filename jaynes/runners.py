@@ -18,7 +18,7 @@ class Slurm:
         return cls, {k.value: v.value for k, v in node.value}
 
     def __init__(self, pypath="", setup="", startup=STARTUP, mount=None, launch_directory=None, envs=None, n_gpu=None,
-                 partition="dev", time_limit="5", n_cpu=4, label="", comment=""):
+                 partition="dev", time_limit="5", n_cpu=4, name="", label=False, comment=""):
         launch_directory = launch_directory or os.getcwd()
         entry_script = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}} python -u -m jaynes.entry"
         # --get-user-env
@@ -31,7 +31,8 @@ class Slurm:
         cmd += f"""{"cd '{}';".format(launch_directory) if launch_directory else ""}"""
 
         slurm_cmd = f"srun --gres=gpu:{n_gpu or 0} --partition={partition} --time={time_limit} " \
-            f"--cpus-per-task {n_cpu} --label='{label}' --comment='{comment}' /bin/bash -l -c '{cmd} {entry_script}'"
+            f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
+            f"--comment='{comment}' /bin/bash -l -c '{cmd} {entry_script}'"
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""
                 {envs if envs else ""} 
