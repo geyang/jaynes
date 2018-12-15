@@ -15,7 +15,7 @@ class Slurm:
 
     @classmethod
     def from_yaml(cls, _, node):
-        return cls, {k.value: v.value for k, v in node.value}
+        return cls, _.construct_mapping(node)
 
     def __init__(self, pypath="", setup="", startup=STARTUP, mount=None, launch_directory=None, envs=None, n_gpu=None,
                  partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False):
@@ -55,7 +55,7 @@ class Simple:
 
     @classmethod
     def from_yaml(cls, _, node):
-        return cls, {k.value: v.value for k, v in node.value}
+        return cls, _.construct_mapping(node)
 
     def __init__(self, pypath="", startup=STARTUP, mount=None, launch_directory=None, envs=None, use_gpu=False):
         """
@@ -98,7 +98,7 @@ class Docker:
 
     @classmethod
     def from_yaml(cls, _, node):
-        return cls, {k.value: v.value for k, v in node.value}
+        return cls, _.construct_mapping(node)
 
     def __init__(self, *, image, work_directory=None, launch_directory=None, startup=STARTUP, mount=None,
                  pypath=None, envs=None, name=None, use_gpu=False, ipc=None, tty=False, ):

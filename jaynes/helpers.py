@@ -1,5 +1,3 @@
-
-
 def path_no_ext(path):
     return '.'.join(path.split('.')[:-1])
 
@@ -63,10 +61,11 @@ def n_to_m(yaml_node):
     return {k.value: v.value for k, v in yaml_node.value}
 
 
-def hydrate(fn, ctx):
+# note: now we properly handle the node types.
+def hydrate(Constructor, ctx):
     def _fn(_, node):
-        return fn(**{k.value: v.value.format(**ctx) if type(v.value) is str else v.value
-                   for k, v in node.value})
+        kwargs = {k: v.format(**ctx) if isinstance(v, str) else v for k, v
+                  in _.construct_mapping(node).items()}
+        return Constructor(**kwargs)
 
     return _fn
-
