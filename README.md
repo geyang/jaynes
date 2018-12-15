@@ -1,5 +1,7 @@
 # Jaynes, A Utility for training ML models on AWS, GCE, SLURM, with or without docker <a href="figures/ETJaynes_defiant.jpg" target="_blank"><img src="figures/ETJaynes_defiant.jpg" alt="Defiant Jaynes" align="right" width="350px" style="top:20px"></a>
 
+[![Downloads](http://pepy.tech/badge/jaynes)](http://pepy.tech/project/jaynes)
+
 ## Todo
 
 - [x] get the initial template to work
