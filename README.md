@@ -2,11 +2,144 @@
 
 [![Downloads](http://pepy.tech/badge/jaynes)](http://pepy.tech/project/jaynes)
 
-## Todo
+## Overview
 
-- [x] get the initial template to work
+The reality of ML training in universities is that we use what ever hardware we are given (for free). This means that
+we might have a few beefy GPU machines, an HPC cluster, plus some GCE/AWS credits that we get through grants. 
+[**Jaynes**](https://github.com/episodeyang/jaynes) is a well-designed python package that makes running across
+these inhomogenous hardward resources a pleasure.
+
+**install** (requires unix operating system.)
+```bash
+pip install jaynes
+```
+To run **locally**:
+```python
+import jaynes
+
+def training(arg_1, key_arg=None):
+    print(f'training is running! (arg_1={arg_1}, key_arg={key_arg})')
+
+jaynes.config(mode="local")
+jaynes.run(training)
+```
+
+## Setup
+
+Jaynes has gone through a large number of iterations. This version incorporates best practices we learned
+from other open-source communities. You can specify a `jaynes.yml` config file ([copy one from our sample
+project to get started!](./test_projects)) for the type of hosts (ssh/docker/singularity) and launchers
+ (ssh/ec2/gce/slurm), so that none of those settings need to appear in your ML python script. When called
+from python, Jaynes automatically traverses the file tree to find the root of the project, the 
+same way as git.
+
+For example, to run your code on a remote computer via ssh:
+```yaml
+# your_project/jaynes.yml
+version: 0
+verbose: true
+run:  # this is specific to each launch, and is dynamically overwritten in-memory
+  mounts:
+    - !mounts.S3Code
+      s3_prefix: s3://ge-bair/jaynes-debug
+      local_path: .
+      host_path: /home/ubuntu/
+      container_path: /Users/geyang/learning-to-learn
+      pypath: true
+      excludes: "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'   --exclude='*.pkl'"
+      compress: true
+  runner:
+    !runners.Docker
+    name:   # not implemented yet
+    image: "episodeyang/super-expert"
+    startup: "yes | pip install jaynes ml-logger -q"
+    work_directory: "{mounts[0].container_path}"
+    ipc: host
+  host:
+    envs: "LANG=utf-8"
+    pre_launch: "pip install jaynes ml-logger -q"
+  launch:
+    type: ssh
+    ip: <your ip address>
+    username: ubuntu
+    pem: ~/.ssh/your_rsa_key
+```
+
+In python (your code):
+```python
+# your_project/launch.py
+import jaynes
+
+def training(arg_1, key_arg=None):
+    print(f'training is running! (arg_1={arg_1}, key_arg={key_arg})')
+
+jaynes.run(training)
+```
+
+## Using Modes
+
+A lot of times you want to setup a different run **modes** so it is
+easy to switch between them during development.
+
+```yaml
+# your_project/jaynes.yml
+version: 0
+mounts: # mount configurations Available keys: NOW, UUID,
+  - !mounts.S3Code &code_mount
+    s3_prefix: s3://ge-bair/jaynes-debug
+    local_path: .
+    host_path: /home/ubuntu/jaynes-mounts/{NOW:%Y-%m-%d}/{NOW:%H%M%S.%f}
+    # container_path: /Users/geyang/learning-to-learn
+    pypath: true
+    excludes: "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info' --exclude='*.pkl'"
+    compress: true
+hosts:
+  hodor: &hodor
+    ip: <your ip address>
+    username: ubuntu
+    pem: ~/.ssh/incrementium-berkeley
+runners:
+  - !runners.Docker &ssh_docker
+    name: "some-job"  # only for docker
+    image: "episodeyang/super-expert"
+    startup: yes | pip install jaynes ml-logger -q
+    envs: "LANG=utf-8"
+    pypath: "{mounts[0].container_path}"
+    launch_directory: "{mounts[0].container_path}"
+    ipc: host
+    use_gpu: false
+modes: # todo: add support to modes.
+  hodor:
+    mounts:
+      - *code_mount
+    runner: *ssh_docker
+    launch:
+      type: ssh
+      <<: *hodor
+```
+
+now run in python
+```python
+# your_project/launch.py
+import jaynes
+
+def training(arg_1, key_arg=None):
+    print(f'training is running! (arg_1={arg_1}, key_arg={key_arg})')
+
+jaynes.config(mode="hodor")
+jaynes.run(training)
+```
+
+## ToDos
+
+- [ ] more documentation
+- [ ] singularity support
+- [ ] GCE support
+- [ ] support using non-s3 code repo.
 
 ### Done
+
+- [x] get the initial template to work
 
 ## Installation
 
@@ -16,9 +149,7 @@ pip install jaynes
 
 ## Usage (**Show me the Mo-NAY!! :moneybag::money_with_wings:**)
 
-Check out the [test_projects](./test_projects) folder for projects that you can run. I just recenlty implemented a hugely improved API that uses a static `yaml` configuration file, so the documentations are still comming.
-
-To try to get things to work via ssh/slurm/aws, see [test_projects](./test_projects).
+Check out the [test_projects](./test_projects) folder for projects that you can run.
 
 ## To Develop
 

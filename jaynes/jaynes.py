@@ -242,6 +242,9 @@ class RUN:
     J: Jaynes = None
     config = None
 
+    # default value for the run mode
+    mode = None
+
 
 from datetime import datetime
 
