@@ -355,7 +355,7 @@ def run(fn, *args, **kwargs):
     launch_config = RUN.config['launch']
     _ = getattr(j, launch_config['type'])(**omit(launch_config, 'type'))
     if RUN.config.get('verbose'):
-        cprint(f"lauched! {_}", "green")
+        cprint(f"launched! {_}", "green")
     return _
 
 
