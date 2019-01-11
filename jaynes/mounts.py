@@ -143,3 +143,64 @@ class S3Output:
         self.docker_mount = f"-v '{host_path}':'{container_path}'"
         self.container_path = container_path
         self.pypath = pypath
+
+
+# New
+class SSHCode:
+    def __init__(self, *, ip, port, username, pem, local_path, host_path=None, remote_tar=None,
+                 container_path=None, pypath=False, excludes=None, file_mask=None, name=None, compress=True):
+        """
+        Tars a local folder, uploads the content to S3, downloads the tar ball on the remote instance and mounts it
+        in docker.
+
+        :param local_path: path to the local directory. Doesn't have to be absolute.
+        :param s3_prefix: The s3 prefix including the s3: protocol, the bucket, and the path prefix.
+        :param host_path: The path on the remote instance. Default /tmp/{uuid4()}
+        :param name: the name for the tar ball. Default to {uuid4()}
+        :param container_path: The path for the docker instance. Can be something like /Users/ge/project-folder/blah
+        :param pypath (bool): Whether this directory should be added to the python path
+        :param excludes: The files paths to exclude, default to "--exclude='*__pycache__'"
+        :param file_mask: The file mask for files to include. Default to "."
+        :return: self
+        """
+        # I fucking hate the behavior of python defaults. -- GY
+        file_mask = file_mask or "."  # file_mask can Not be None or "".
+        excludes = excludes or "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'"
+        name = name or uuid4()
+        tar_name = f"{name}.tar"
+        self.temp_dir = get_temp_dir()
+        local_tar = pathJoin(self.temp_dir, tar_name)
+        from .jaynes import RUN
+        local_abs = os.path.join(RUN.project_root, local_path)
+        if host_path:
+            assert os.path.isabs(host_path), "host_path path has to be absolute"
+        else:
+            host_path = f"/tmp/{name}"
+
+        from .jaynes import RUN
+        docker_abs = os.path.join(RUN.project_root, container_path) if container_path else local_abs
+        remote_tar = remote_tar or f"/tmp/{tar_name}"
+
+        port_ = "" if port is None else f"-p {port}"
+        pem_ = "" if pem is None else f"-i {pem}"
+
+        # scp does not allow file rename.
+        remote_tar_dir = os.path.dirname(remote_tar)
+        scp_script = f"scp {port_.upper()} {pem} {local_tar} {username}@{ip}:{remote_tar_dir}"
+        rsync_script = f"rsync -az -e 'ssh {port_} {pem_}' {local_tar} {username}@{ip}:{remote_tar}"
+
+        self.local_script = f"""
+                type gtar >/dev/null 2>&1 && alias tar=`which gtar`
+                mkdir -p '{self.temp_dir}'
+                # Do not use absolute path in tar.
+                tar {excludes} -c{"z" if compress else ""}f '{local_tar}' -C '{local_abs}' {file_mask}
+                {rsync_script}
+                """
+        self.host_path = host_path
+        self.host_setup = f"""
+                mkdir -p '{host_path}'
+                tar -{"z" if compress else ""}xf '{remote_tar}' -C '{host_path}'
+                """
+        self.pypath = pypath
+        self.container_path = docker_abs
+        self.docker_mount = f"-v '{host_path}':'{docker_abs}'"

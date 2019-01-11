@@ -77,8 +77,8 @@ class Jaynes:
             ck(remote_script, shell=True)
         return self
 
-    def make_launch_script(self, log_dir, setup=None, terminate_after=False, delay=None,
-                           instance_tag=None, region=None):
+    def make_host_script(self, log_dir, setup=None, terminate_after=False, delay=None,
+                         instance_tag=None, region=None):
         """
 
         :param log_dir: 
@@ -346,7 +346,7 @@ def run(fn, *args, **kwargs):
 
     # config.HOST
     host_config = RUN.config.get('host', {})
-    j.make_launch_script(log_dir="~/debug-outputs", **host_config)
+    j.make_host_script(log_dir="~/debug-outputs", **host_config)
 
     if RUN.config.get('verbose'):
         print(j.launch_script)
@@ -355,15 +355,17 @@ def run(fn, *args, **kwargs):
     launch_config = RUN.config['launch']
     _ = getattr(j, launch_config['type'])(**omit(launch_config, 'type'))
     if RUN.config.get('verbose'):
-        cprint("lauched!", "green")
+        cprint(f"lauched! {_}", "green")
+    return _
 
 
 def listen(timeout=None):
     """Just a for-loop, to keep ths process connected to the ssh session"""
     import math, time
+    cprint('Listening to pipe back...', 'green')
     t0 = time.time()
     while True:
         time.sleep(math.pi)
         if timeout and (time.time() - t0) > timeout:
-            cprint(f'jaynes.listen(timeout={timeout}) is now timed out', 'green')
+            cprint(f'jaynes.listen(timeout={timeout}) is now timed out. remote routine is still running.', 'green')
             break

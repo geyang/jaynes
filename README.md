@@ -28,7 +28,7 @@ jaynes.run(training)
 
 Jaynes has gone through a large number of iterations. This version incorporates best practices we learned
 from other open-source communities. You can specify a `jaynes.yml` config file ([copy one from our sample
-project to get started!](./test_projects)) for the type of hosts (ssh/docker/singularity) and launchers
+project to get started!](example_projects)) for the type of hosts (ssh/docker/singularity) and launchers
  (ssh/ec2/gce/slurm), so that none of those settings need to appear in your ML python script. When called
 from python, Jaynes automatically traverses the file tree to find the root of the project, the 
 same way as git.
@@ -149,7 +149,7 @@ pip install jaynes
 
 ## Usage (**Show me the Mo-NAY!! :moneybag::money_with_wings:**)
 
-Check out the [test_projects](./test_projects) folder for projects that you can run.
+Check out the [test_projects](example_projects) folder for projects that you can run.
 
 ## To Develop
 
