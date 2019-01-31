@@ -70,7 +70,7 @@ class Simple:
         """
         launch_directory = launch_directory or os.getcwd()
         entry_script = "python -u -m jaynes.entry"
-        cmd = f"""printf "\\e[1;34m%-6s\\e[m" "Running on cluster{' (gpu)' if use_gpu else ''}"\n;"""
+        cmd = f"""printf "\\e[1;34m%-6s\\e[m" "Running on remote host {' (gpu)' if use_gpu else ''}";"""
         cmd += (startup.strip() + ';') if startup else ''
         cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath};"
         cmd += f"""{"cd '{}';".format(launch_directory) if launch_directory else ""}"""
