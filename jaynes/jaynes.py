@@ -246,30 +246,40 @@ class RUN:
     mode = None
 
 
-from datetime import datetime
+def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, **ext):
+    """
+    Configuration function for Jaynes
 
-
-def config(path=None, mode=None, runner=None, host=None, launch=None, **ext):
+    :param mode: the run mode you want to use, specified under the `modes` key inside your jaynes.yml config file
+    :param config_path: the path to the configuration file. Allows you to use a custom configuration file
+    :param runner: configuration for the runner, overwrites what's in the jaynes.yml file.
+    :param host: configuration for the host machine, overwrites what's in the jaynes.yml file.
+    :param launch: configuration for the `launch` function, overwrites what's in the jaynes.yml file
+    :param ext: variables to pass into the string interpolation. Shows up directly as root-level variables in
+                the string interpolation context
+    :return: None
+    """
     RUN.mode = mode
     if RUN.J is None:
-        if path is None:
+        if config_path is None:
             for d in cwd_ancestors():
                 try:
-                    path, = glob.glob(d + "/jaynes.yml")
+                    config_path, = glob.glob(d + "/jaynes.yml")
                     break
                 except Exception:
                     pass
-        if path is None:
+        if config_path is None:
             cprint('No `jaynes.yml` is found. Run `jaynes.init` to create a configuration file.', "red")
             return
 
-        RUN.project_root = os.path.dirname(path)
+        RUN.project_root = os.path.dirname(config_path)
 
         from datetime import datetime
         from uuid import uuid4
         from inspect import isclass
 
-        ctx = dict(NOW=datetime.now(), UUID=uuid4())
+        # supports these information for the string formatting context.
+        ctx = dict(NOW=datetime.now(), UUID=uuid4(), env={k: v for k, v in os.environ.items()})
 
         for k, c in mounts.__dict__.items():
             if isclass(c):
@@ -279,7 +289,7 @@ def config(path=None, mode=None, runner=None, host=None, launch=None, **ext):
             if hasattr(c, 'from_yaml'):
                 yaml.SafeLoader.add_constructor("!runners." + k, c.from_yaml)
 
-        with open(path, 'r') as f:
+        with open(config_path, 'r') as f:
             raw = yaml.safe_load(f)
 
         # order or precendence: mode -> run -> root
@@ -362,10 +372,10 @@ def run(fn, *args, **kwargs):
 def listen(timeout=None):
     """Just a for-loop, to keep ths process connected to the ssh session"""
     import math, time
-    cprint('Listening to pipe back...', 'green')
-    t0 = time.time()
-    while True:
-        time.sleep(math.pi)
-        if timeout and (time.time() - t0) > timeout:
-            cprint(f'jaynes.listen(timeout={timeout}) is now timed out. remote routine is still running.', 'green')
-            break
+    if timeout:
+        time.sleep(timeout)
+        cprint(f'jaynes.listen(timeout={timeout}) is now timed out. remote routine is still running.', 'green')
+    else:
+        while True:
+            time.sleep(math.pi * 20)
+            cprint('Listening to pipe back...', 'green')
