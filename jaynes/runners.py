@@ -8,17 +8,19 @@ from .param_codec import serialize
 STARTUP = 'pip install jaynes awscli -q'
 
 
-class Slurm:
-    setup_script = ""
-    run_script = ""
-    post_script = ""
-
+class RunnerType:
     @classmethod
     def from_yaml(cls, _, node):
         return cls, _.construct_mapping(node)
 
-    def __init__(self, pypath="", setup="", startup=STARTUP, mount=None, launch_directory=None, envs=None, n_gpu=None,
-                 partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False):
+
+class Slurm(RunnerType):
+    setup_script = ""
+    run_script = ""
+    post_script = ""
+
+    def __init__(self, pypath="", setup="", startup=STARTUP, launch_directory=None, envs=None, n_gpu=None,
+                 partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, **_):
         launch_directory = launch_directory or os.getcwd()
         entry_script = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}} python -u -m jaynes.entry"
         # --get-user-env
@@ -48,16 +50,12 @@ class Slurm:
         return self
 
 
-class Simple:
+class Simple(RunnerType):
     setup_script = ""
     run_script = ""
     post_script = ""
 
-    @classmethod
-    def from_yaml(cls, _, node):
-        return cls, _.construct_mapping(node)
-
-    def __init__(self, pypath="", startup=STARTUP, mount=None, launch_directory=None, envs=None, use_gpu=False):
+    def __init__(self, pypath="", launch_directory=None, startup=STARTUP, envs=None, use_gpu=False, **_):
         """
         SLURM runner
 
@@ -81,7 +79,7 @@ class Simple:
                 """
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""
-                {test_gpu if use_gpu else "" }
+                {test_gpu if use_gpu else ""}
                 {envs if envs else ""} /bin/bash -c '{cmd}'
                 """
 
@@ -91,17 +89,13 @@ class Simple:
         return self
 
 
-class Docker:
+class Docker(RunnerType):
     setup_script = ""
     run_script = ""
     post_script = ""
 
-    @classmethod
-    def from_yaml(cls, _, node):
-        return cls, _.construct_mapping(node)
-
     def __init__(self, *, image, work_directory=None, launch_directory=None, startup=STARTUP, mount=None,
-                 pypath=None, envs=None, name=None, use_gpu=False, ipc=None, tty=False, ):
+                 pypath=None, envs=None, name=None, use_gpu=False, ipc=None, tty=False, **_):
         """
 
         :param image:
@@ -144,7 +138,7 @@ class Docker:
         wd_config = f"-w={work_directory}" if work_directory else ""
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""
-                {test_gpu if use_gpu else "" }
+                {test_gpu if use_gpu else ""}
                 {remove_by_name}
                 echo 'Now run docker'
                 {envs if envs else ""} {docker_cmd} run -i{"t" if tty else ""} {wd_config} {ipc_config} {mount} --name '{docker_container_name}' \\

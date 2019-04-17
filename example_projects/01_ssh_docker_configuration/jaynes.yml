@@ -3,7 +3,7 @@ mounts:
   - !mounts.S3Code
     s3_prefix: s3://ge-bair/jaynes-debug
     local_path: .
-    host_path: /home/ubuntu/jaynes-mounts/{NOW:%Y-%m-%d}/{NOW:%H%M%S.%f}
+    host_path: /home/ubuntu/jaynes-mounts/{now:%Y-%m-%d}/{now:%H%M%S.%f}
     pypath: true
     excludes: "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info' --exclude='*.pkl'"
     compress: true

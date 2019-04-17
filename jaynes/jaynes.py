@@ -3,6 +3,7 @@ import glob
 import os
 import tempfile
 from textwrap import dedent
+from types import SimpleNamespace
 from typing import Union
 
 from .helpers import cwd_ancestors, omit, hydrate
@@ -234,6 +235,8 @@ class Jaynes:
 import yaml
 from termcolor import cprint
 from . import mounts, runners
+from datetime import datetime
+from uuid import uuid4
 
 
 class RUN:
@@ -260,6 +263,9 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
     :return: None
     """
     RUN.mode = mode
+
+    ctx = dict(env=SimpleNamespace(**os.environ), now=datetime.now(), uuid=uuid4(), **ext)
+
     if RUN.J is None:
         if config_path is None:
             for d in cwd_ancestors():
@@ -274,12 +280,7 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
 
         RUN.project_root = os.path.dirname(config_path)
 
-        from datetime import datetime
-        from uuid import uuid4
         from inspect import isclass
-
-        # supports these information for the string formatting context.
-        ctx = dict(NOW=datetime.now(), UUID=uuid4(), env={k: v for k, v in os.environ.items()})
 
         for k, c in mounts.__dict__.items():
             if isclass(c):
@@ -323,14 +324,13 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
         updated.update(host)
         RUN.config["host"] = updated
 
-    RUN.config.update(ext)
+    RUN.config.update(ctx)
     RUN.J.set_mount(*RUN.config.get("mounts"))
     RUN.J.upload_mount(verbose=RUN.config.get('verbose'))
 
 
-def run(fn, *args, **kwargs):
+def run(fn, *args, __run_config=None, **kwargs, ):
     from copy import deepcopy
-    from types import SimpleNamespace
     if not RUN.J:
         config()
 
@@ -339,11 +339,16 @@ def run(fn, *args, **kwargs):
 
     # config.RUNNER
     Runner, runner_kwargs = RUN.config.get('runner')
+    # interpolaiton context
     context = RUN.config.copy()
-    context['PYPATHS'] = SimpleNamespace(
-        host=":".join([m.host_path for m in RUN.config['mounts'] if m.pypath]),
-        container=":".join([m.container_path for m in RUN.config['mounts'] if m.pypath]))
-    context['CWD'] = os.getcwd()
+    context['run'] = SimpleNamespace(
+        cwd=os.getcwd(),
+        now=datetime.now(),
+        uuid=uuid4(),
+        pypaths=SimpleNamespace(
+            host=":".join([m.host_path for m in RUN.config['mounts'] if m.pypath]),
+            container=":".join([m.container_path for m in RUN.config['mounts'] if m.pypath])
+        ), **(__run_config or {}))
     # todo: mapping current work directory correction on the remote instance.
 
     _ = {k: v.format(**context) if type(v) is str else v for k, v in runner_kwargs.items()}
