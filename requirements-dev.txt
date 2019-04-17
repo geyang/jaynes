@@ -1,0 +1,4 @@
+pygments
+pytest
+restructuredtext-lint
+twine
