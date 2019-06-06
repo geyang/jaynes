@@ -1,4 +1,8 @@
-pygments
-pytest
 restructuredtext-lint
+pygments
 twine
+numpy
+matplotlib
+tensorflow
+torch
+guzzle_sphinx_theme
