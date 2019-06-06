@@ -3,7 +3,7 @@ Detailed API Doc
 
 
 Mounting Options
-----------------
+================
 
 .. autoclass:: jaynes.mounts.Simple
     :members:
@@ -18,7 +18,7 @@ Mounting Options
     :members:
 
 Runners
--------
+=======
 
 .. autoclass:: jaynes.runners.Simple
     :members:
