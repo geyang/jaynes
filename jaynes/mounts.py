@@ -6,8 +6,14 @@ from os.path import join as pathJoin
 
 
 class Simple:
+    """Mount a directory from the remote host to docker
+
+    :param host_path: path on the host
+    :param container_path: path inside the container
+    :param pypath: boolean flag for whether this mount point should be included in the PYPATH environment variable
+    """
+
     def __init__(self, host_path, container_path, pypath=False):
-        """Mount a directory from the remote host to docker"""
         # host_path = remote if os.path.isabs(remote) else pathJoin(self.remote_cwd, remote)
         assert os.path.isabs(host_path), "remote path has to be absolute"
         assert os.path.isabs(container_path), "docker linked path has to be absolute"
@@ -18,22 +24,23 @@ class Simple:
 
 
 class S3Code:
+    """
+    Tars a local folder, uploads the content to S3, downloads the tar ball on the remote instance and mounts it
+    in docker.
+
+    :param local_path: path to the local directory. Doesn't have to be absolute.
+    :param s3_prefix: The s3 prefix including the s3: protocol, the bucket, and the path prefix.
+    :param host_path: The path on the remote instance. Default /tmp/{uuid4()}
+    :param name: the name for the tar ball. Default to {uuid4()}
+    :param container_path: The path for the docker instance. Can be something like /Users/ge/project-folder/blah
+    :param pypath (bool): Whether this directory should be added to the python path
+    :param excludes: The files paths to exclude, default to "--exclude='*__pycache__'"
+    :param file_mask: The file mask for files to include. Default to "."
+    :return: self
+    """
+
     def __init__(self, *, s3_prefix, local_path, host_path=None, remote_tar=None, container_path=None, pypath=False,
                  excludes=None, file_mask=None, name=None, compress=True, public=True, no_signin=True):
-        """
-        Tars a local folder, uploads the content to S3, downloads the tar ball on the remote instance and mounts it
-        in docker.
-        
-        :param local_path: path to the local directory. Doesn't have to be absolute.
-        :param s3_prefix: The s3 prefix including the s3: protocol, the bucket, and the path prefix.
-        :param host_path: The path on the remote instance. Default /tmp/{uuid4()}
-        :param name: the name for the tar ball. Default to {uuid4()}
-        :param container_path: The path for the docker instance. Can be something like /Users/ge/project-folder/blah
-        :param pypath (bool): Whether this directory should be added to the python path
-        :param excludes: The files paths to exclude, default to "--exclude='*__pycache__'"
-        :param file_mask: The file mask for files to include. Default to "."
-        :return: self
-        """
         # I fucking hate the behavior of python defaults. -- GY
         file_mask = file_mask or "."  # file_mask can Not be None or "".
         excludes = excludes or "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'"
@@ -71,29 +78,30 @@ class S3Code:
 
 
 class S3Output:
+    """
+    Mounting a remote directory to docker, and upload it's content periodically to s3.
+
+    **To Avoid downloading to local during startup**: set local to None
+
+    s3 path syntax:
+                {s3_prefix}{s3_dir}
+    local path syntax:
+                file://{local}
+    remote path syntax:
+                ssh://<remote>:{remote if isabs(remote) else remote_cwd + remote}
+            note that the remote path is made absolute using the remote_cwd parameter
+
+    :param name:
+    :param s3_prefix: Need slash at the end.
+    :param local_path: When None, do not download those files
+    :param interval:
+    :param pypath:
+    :param sync_s3:
+    :return:
+    """
+
     def __init__(self, *, container_path, s3_prefix, host_path=None, name=None, local_path=None, interval=15,
                  pypath=False, sync_s3=True):
-        """
-        Mounting a remote directory to docker, and upload it's content periodically to s3.
-
-        **To Avoid downloading to local during startup**: set local to None
-
-        s3 path syntax:
-                    {s3_prefix}{s3_dir}
-        local path syntax:
-                    file://{local}
-        remote path syntax:
-                    ssh://<remote>:{remote if isabs(remote) else remote_cwd + remote}
-                note that the remote path is made absolute using the remote_cwd parameter
-
-        :param name:
-        :param s3_prefix: Need slash at the end.
-        :param local_path: When None, do not download those files
-        :param interval:
-        :param pypath:
-        :param sync_s3:
-        :return:
-        """
 
         if host_path is None:
             host_path = f"/tmp/jaynes_mounts/{uuid4() if name is None else name}"
@@ -147,22 +155,23 @@ class S3Output:
 
 # New
 class SSHCode:
+    """
+    Tars a local folder, uploads the content to S3, downloads the tar ball on the remote instance and mounts it
+    in docker.
+
+    :param local_path: path to the local directory. Doesn't have to be absolute.
+    :param s3_prefix: The s3 prefix including the s3: protocol, the bucket, and the path prefix.
+    :param host_path: The path on the remote instance. Default /tmp/{uuid4()}
+    :param name: the name for the tar ball. Default to {uuid4()}
+    :param container_path: The path for the docker instance. Can be something like /Users/ge/project-folder/blah
+    :param pypath (bool): Whether this directory should be added to the python path
+    :param excludes: The files paths to exclude, default to "--exclude='*__pycache__'"
+    :param file_mask: The file mask for files to include. Default to "."
+    :return: self
+    """
+
     def __init__(self, *, ip, port, username, pem, local_path, host_path=None, remote_tar=None,
                  container_path=None, pypath=False, excludes=None, file_mask=None, name=None, compress=True):
-        """
-        Tars a local folder, uploads the content to S3, downloads the tar ball on the remote instance and mounts it
-        in docker.
-
-        :param local_path: path to the local directory. Doesn't have to be absolute.
-        :param s3_prefix: The s3 prefix including the s3: protocol, the bucket, and the path prefix.
-        :param host_path: The path on the remote instance. Default /tmp/{uuid4()}
-        :param name: the name for the tar ball. Default to {uuid4()}
-        :param container_path: The path for the docker instance. Can be something like /Users/ge/project-folder/blah
-        :param pypath (bool): Whether this directory should be added to the python path
-        :param excludes: The files paths to exclude, default to "--exclude='*__pycache__'"
-        :param file_mask: The file mask for files to include. Default to "."
-        :return: self
-        """
         # I fucking hate the behavior of python defaults. -- GY
         file_mask = file_mask or "."  # file_mask can Not be None or "".
         excludes = excludes or "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'"
