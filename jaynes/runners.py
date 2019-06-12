@@ -20,17 +20,53 @@ class Slurm(RunnerType):
 
     The :code:`**options` catch-all allows you to specify those options not already included. For example:
 
-    .. code:: yml
+    .. code:: yaml
 
             begin: "16:00""         # -> --begin=`16:00`
             time_limit: "71:00:00"  # -> --time-limit=`71:00:00`
             nodes: 10               # -> --nodes=`10`
 
-    :param pypath:
-    :param setup:
-    :param startup:
-    :param launch_directory:
-    :param envs:
+    For the full set of options available on :code:`srun`, you can refer to SLURM documentation.
+
+    Example
+    -------
+
+    to configure the Slurm runner in :code:`jaynes.yml`, you can do
+
+    .. code:: yaml
+
+        runners:
+          - !runners.Docker &ssh_docker
+            name: "some-job"  # only for docker
+            image: "episodeyang/super-expert"
+            startup: yes | pip install jaynes ml-logger -q
+            envs: "LANG=utf-8"
+            pypath: "{mounts[0].container_path}"
+            launch_directory: "{mounts[0].container_path}"
+            ipc: host
+            use_gpu: false
+          - !runners.Slurm &fair_slurm
+            envs: >-
+              LD_LIBRARY_PATH=/public/apps/anaconda3/5.0.1/lib:/private/home/geyang/.mujoco/mjpro150/bin::/public/slurm/17.11.4/lib
+            startup: >-
+              source /etc/profile;
+              source ~/.profile;
+              module load anaconda3/5.0.1;
+              source activate playground;
+              export LC_CTYPE=en_US.UTF-8
+            # cd {mounts[0].host_path} && pip install -e . -q
+            pypath: "{mounts[0].host_path}/rl:{mounts[0].host_path}/imitation:{mounts[0].host_path}/rl_maml_tf"
+            launch_directory: "{mounts[0].host_path}"
+            partition: "dev,priority,uninterrupted"
+            time_limit: "0:0:20"
+            n_cpu: 40
+            n_gpu: 0
+
+    :param pypath: bool, whether this mounting point is included as a part of the python path
+    :param setup: setup script, run in the host to setup the environments
+    :param startup: startup script, run inside the :code:`srun` session, before your code is boostrapped.
+    :param launch_directory: path to the current work directory for :code:`srun`.
+    :param envs: string containing the environment variables. Need to be :code:`;` separated, single line.
     :param n_gpu:
     :param partition:
     :param time_limit:

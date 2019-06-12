@@ -28,6 +28,28 @@ class S3Code:
     Tars a local folder, uploads the content to S3, downloads the tar ball on the remote instance and mounts it
     in docker.
 
+    To configure in the yaml file, you can do:
+
+    .. code:: yaml
+
+        mounts: # mount configurations Available keys: NOW, UUID,
+        - !mounts.S3Code &code_mount
+          s3_prefix: s3://ge-bair/jaynes-debug
+          local_path: .
+          host_path: /home/ubuntu/jaynes-mounts/{now:%Y-%m-%d}/{now:%H%M%S.%f}
+          # container_path: /Users/geyang/learning-to-learn
+          pypath: true
+          excludes: "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info' --exclude='*.pkl'"
+          compress: true
+        - !mounts.S3Code &fair_code_mount
+          s3_prefix: s3://ge-bair/jaynes-debug
+          local_path: .
+          host_path: /private/home/geyang/jaynes-mounts/{now:%Y-%m-%d}/{now:%H%M%S.%f}
+          pypath: true
+          excludes: "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info' --exclude='*.pkl'"
+          compress: true
+
+
     :param local_path: path to the local directory. Doesn't have to be absolute.
     :param s3_prefix: The s3 prefix including the s3: protocol, the bucket, and the path prefix.
     :param host_path: The path on the remote instance. Default /tmp/{uuid4()}
@@ -158,6 +180,7 @@ class SSHCode:
     """
     Tars a local folder, uploads the content to S3, downloads the tar ball on the remote instance and mounts it
     in docker.
+
 
     :param local_path: path to the local directory. Doesn't have to be absolute.
     :param s3_prefix: The s3 prefix including the s3: protocol, the bucket, and the path prefix.
