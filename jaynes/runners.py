@@ -20,7 +20,32 @@ class Slurm(RunnerType):
     post_script = ""
 
     def __init__(self, pypath="", setup="", startup=STARTUP, launch_directory=None, envs=None, n_gpu=None,
-                 partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, **_):
+                 partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, **options):
+        """
+        SLURM SRUN runner. This runner launches using `srun`.
+
+        The ..code::`**options` catch-all allows you to specify those options not already included. For example:
+
+        .. code:: yml
+
+                begin: "16:00""         # -> --begin=`16:00`
+                time_limit: "71:00:00"  # -> --time-limit=`71:00:00`
+                nodes: 10               # -> --nodes=`10`
+
+        :param pypath:
+        :param setup:
+        :param startup:
+        :param launch_directory:
+        :param envs:
+        :param n_gpu:
+        :param partition:
+        :param time_limit:
+        :param n_cpu:
+        :param name:
+        :param comment:
+        :param label:
+        :param options: you can specify extra options beyond what is offered above.
+        """
         launch_directory = launch_directory or os.getcwd()
         entry_script = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}} python -u -m jaynes.entry"
         # --get-user-env
@@ -34,9 +59,10 @@ class Slurm(RunnerType):
 
         # some cluster only allows --gres=gpu:[1-]
         gres = f"--gres=gpu:{n_gpu}" if n_gpu else ""
+        extra_options = " ".join([f"--{k.replace('_', '-')}='{v}'" for k, v in options])
         slurm_cmd = f"srun {gres} --partition={partition} --time={time_limit} " \
             f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
-            f"--comment='{comment}' /bin/bash -l -c '{cmd} {entry_script}'"
+            f"--comment='{comment}' {extra_options} /bin/bash -l -c '{cmd} {entry_script}'"
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""
                 {envs if envs else ""} 
@@ -57,7 +83,7 @@ class Simple(RunnerType):
 
     def __init__(self, pypath="", launch_directory=None, startup=STARTUP, envs=None, use_gpu=False, **_):
         """
-        SLURM runner
+        Simple runner, good for running things locally.
 
         :param pypath:
         :param startup:

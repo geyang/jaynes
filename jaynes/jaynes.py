@@ -49,7 +49,7 @@ class Jaynes:
             [m.remote_setup for m in self.mounts if hasattr(m, "remote_setup") and m.remote_setup]
         )
 
-        remote_script = f"""
+        remote_script = dedent(f"""
         #!/bin/bash
         # to allow process substitution
         set +o posix
@@ -71,7 +71,7 @@ class Jaynes:
             # Now sleep before ending this script
             sleep {delay}
         }} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
-        """
+        """).strip()
         if verbose:
             print(remote_script)
         if not dry:
@@ -81,6 +81,7 @@ class Jaynes:
     def make_host_script(self, log_dir, setup=None, terminate_after=False, delay=None,
                          instance_tag=None, region=None):
         """
+        function to make the host script
 
         :param log_dir: 
         :param sudo:
@@ -121,11 +122,14 @@ class Jaynes:
             fi
         """
         # TODO: path.join is running on local computer, so it might not be quite right if remote is say windows.
-        launch_script = f"""
+        # note: dedent is required by aws EC2.
+        # noinspection PyAttributeOutsideInit
+        self.launch_script = dedent(f"""
         #!/bin/bash
         # to allow process substitution
         set +o posix
         mkdir -p {log_dir}
+        JAYNES_LOG_DIR={log_dir}
         {{
             # clear main_log
             truncate -s 0 {log_path}
@@ -146,9 +150,7 @@ class Jaynes:
             {ec2_terminate(region, delay) if terminate_after else ""}
 
         }} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
-        """
-
-        self.launch_script = dedent(launch_script).strip()
+        """).strip()
 
         return self
 
