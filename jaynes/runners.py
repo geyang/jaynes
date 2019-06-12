@@ -18,7 +18,7 @@ class Slurm(RunnerType):
     """
     SLURM SRUN runner. This runner launches using `srun`.
 
-    The ..code::`**options` catch-all allows you to specify those options not already included. For example:
+    The :code:`**options` catch-all allows you to specify those options not already included. For example:
 
     .. code:: yml
 
