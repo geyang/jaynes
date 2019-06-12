@@ -35,17 +35,7 @@ class Slurm(RunnerType):
 
     .. code:: yaml
 
-        runners:
-          - !runners.Docker &ssh_docker
-            name: "some-job"  # only for docker
-            image: "episodeyang/super-expert"
-            startup: yes | pip install jaynes ml-logger -q
-            envs: "LANG=utf-8"
-            pypath: "{mounts[0].container_path}"
-            launch_directory: "{mounts[0].container_path}"
-            ipc: host
-            use_gpu: false
-          - !runners.Slurm &fair_slurm
+        runner: !runners.Slurm # <- this is a yaml syntax to select the class
             envs: >-
               LD_LIBRARY_PATH=/public/apps/anaconda3/5.0.1/lib:/private/home/geyang/.mujoco/mjpro150/bin::/public/slurm/17.11.4/lib
             startup: >-
@@ -154,6 +144,23 @@ class Simple(RunnerType):
 class Docker(RunnerType):
     """
     Docker Runner
+
+    Example
+    -------
+
+    to configure the Docker runner in :code:`jaynes.yml`, you can do
+
+    .. code:: yaml
+
+        runner: !runners.Docker # <- this is a yaml syntax to select the class
+            name: "some-job"  # only for docker
+            image: "episodeyang/super-expert"
+            startup: yes | pip install jaynes ml-logger -q
+            envs: "LANG=utf-8"
+            pypath: "{mounts[0].container_path}"
+            launch_directory: "{mounts[0].container_path}"
+            ipc: host
+            use_gpu: false
 
     :param image:
     :param startup: the script you want to run first INSIDE docker
