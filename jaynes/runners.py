@@ -35,7 +35,8 @@ class Slurm(RunnerType):
 
     .. code:: yaml
 
-        runner: !runners.Slurm # <- this is a yaml syntax to select the class
+        # ⬇️ this is a yaml syntax to select the class
+        runner: !runners.Slurm
             envs: >-
               LD_LIBRARY_PATH=/public/apps/anaconda3/5.0.1/lib:/private/home/geyang/.mujoco/mjpro150/bin::/public/slurm/17.11.4/lib
             startup: >-
@@ -152,7 +153,8 @@ class Docker(RunnerType):
 
     .. code:: yaml
 
-        runner: !runners.Docker # <- this is a yaml syntax to select the class
+        # ⬇️ this is a yaml syntax to select the class
+        runner: !runners.Docker
             name: "some-job"  # only for docker
             image: "episodeyang/super-expert"
             startup: yes | pip install jaynes ml-logger -q
