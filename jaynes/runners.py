@@ -15,37 +15,37 @@ class RunnerType:
 
 
 class Slurm(RunnerType):
+    """
+    SLURM SRUN runner. This runner launches using `srun`.
+
+    The ..code::`**options` catch-all allows you to specify those options not already included. For example:
+
+    .. code:: yml
+
+            begin: "16:00""         # -> --begin=`16:00`
+            time_limit: "71:00:00"  # -> --time-limit=`71:00:00`
+            nodes: 10               # -> --nodes=`10`
+
+    :param pypath:
+    :param setup:
+    :param startup:
+    :param launch_directory:
+    :param envs:
+    :param n_gpu:
+    :param partition:
+    :param time_limit:
+    :param n_cpu:
+    :param name:
+    :param comment:
+    :param label:
+    :param options: you can specify extra options beyond what is offered above.
+    """
     setup_script = ""
     run_script = ""
     post_script = ""
 
     def __init__(self, pypath="", setup="", startup=STARTUP, launch_directory=None, envs=None, n_gpu=None,
                  partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, **options):
-        """
-        SLURM SRUN runner. This runner launches using `srun`.
-
-        The ..code::`**options` catch-all allows you to specify those options not already included. For example:
-
-        .. code:: yml
-
-                begin: "16:00""         # -> --begin=`16:00`
-                time_limit: "71:00:00"  # -> --time-limit=`71:00:00`
-                nodes: 10               # -> --nodes=`10`
-
-        :param pypath:
-        :param setup:
-        :param startup:
-        :param launch_directory:
-        :param envs:
-        :param n_gpu:
-        :param partition:
-        :param time_limit:
-        :param n_cpu:
-        :param name:
-        :param comment:
-        :param label:
-        :param options: you can specify extra options beyond what is offered above.
-        """
         launch_directory = launch_directory or os.getcwd()
         entry_script = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}} python -u -m jaynes.entry"
         # --get-user-env
@@ -77,21 +77,21 @@ class Slurm(RunnerType):
 
 
 class Simple(RunnerType):
+    """
+    Simple runner, good for running things locally.
+
+    :param pypath:
+    :param startup:
+    :param mount:
+    :param launch_directory:
+    :param envs: Set of environment key and variables, a string
+    :param use_gpu:
+    """
     setup_script = ""
     run_script = ""
     post_script = ""
 
     def __init__(self, pypath="", launch_directory=None, startup=STARTUP, envs=None, use_gpu=False, **_):
-        """
-        Simple runner, good for running things locally.
-
-        :param pypath:
-        :param startup:
-        :param mount:
-        :param launch_directory:
-        :param envs: Set of environment key and variables, a string
-        :param use_gpu:
-        """
         launch_directory = launch_directory or os.getcwd()
         entry_script = "python -u -m jaynes.entry"
         cmd = f"""printf "\\e[1;34m%-6s\\e[m" "Running on remote host {' (gpu)' if use_gpu else ''}";"""
@@ -116,27 +116,28 @@ class Simple(RunnerType):
 
 
 class Docker(RunnerType):
+    """
+    Docker Runner
+
+    :param image:
+    :param startup: the script you want to run first INSIDE docker
+    :param mount:
+    :param pypath:
+    :param work_directory:
+    :param launch_directory:
+    :param envs: Set of environment key and variables, a string
+    :param name: Name of the docker container instance, use uuid if is None
+    :param use_gpu:
+    :type ipc: specify ipc for multiprocessing. Typically 'host'
+    :param tty: almost never used. This is because when this script is ran, it is almost garanteed that the
+                ssh/bash session is not going to be tty.
+    """
     setup_script = ""
     run_script = ""
     post_script = ""
 
     def __init__(self, *, image, work_directory=None, launch_directory=None, startup=STARTUP, mount=None,
                  pypath=None, envs=None, name=None, use_gpu=False, ipc=None, tty=False, **_):
-        """
-
-        :param image:
-        :param startup: the script you want to run first INSIDE docker
-        :param mount:
-        :param pypath:
-        :param work_directory:
-        :param launch_directory:
-        :param envs: Set of environment key and variables, a string
-        :param name: Name of the docker container instance, use uuid if is None
-        :param use_gpu:
-        :type ipc: specify ipc for multiprocessing. Typically 'host'
-        :param tty: almost never used. This is because when this script is ran, it is almost garanteed that the
-                    ssh/bash session is not going to be tty.
-        """
         self.setup_script = f"""
             # sudo service docker start # this is optional.
             # docker pull {image}
