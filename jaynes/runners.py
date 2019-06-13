@@ -71,7 +71,8 @@ class Slurm(RunnerType):
     run_script = ""
     post_script = ""
 
-    def __init__(self, pypath="", setup="", startup=STARTUP, launch_directory=None, envs=None, n_gpu=None,
+    def __init__(self, *, mounts=None, pypath="", setup="", startup=STARTUP, launch_directory=None, envs=None,
+                 n_gpu=None,
                  partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, **options):
         launch_directory = launch_directory or os.getcwd()
         entry_script = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}} python -u -m jaynes.entry"
@@ -86,7 +87,7 @@ class Slurm(RunnerType):
 
         # some cluster only allows --gres=gpu:[1-]
         gres = f"--gres=gpu:{n_gpu}" if n_gpu else ""
-        extra_options = " ".join([f"--{k.replace('_', '-')}='{v}'" for k, v in options])
+        extra_options = " ".join([f"--{k.replace('_', '-')}='{v}'" for k, v in options.items()])
         slurm_cmd = f"srun {gres} --partition={partition} --time={time_limit} " \
             f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
             f"--comment='{comment}' {extra_options} /bin/bash -l -c '{cmd} {entry_script}'"
@@ -118,7 +119,8 @@ class Simple(RunnerType):
     run_script = ""
     post_script = ""
 
-    def __init__(self, pypath="", launch_directory=None, startup=STARTUP, envs=None, use_gpu=False, **_):
+    def __init__(self, *, mounts=None, pypath="", launch_directory=None, startup=STARTUP, envs=None, use_gpu=False,
+                 **_):
         launch_directory = launch_directory or os.getcwd()
         entry_script = "python -u -m jaynes.entry"
         cmd = f"""printf "\\e[1;34m%-6s\\e[m" "Running on remote host {' (gpu)' if use_gpu else ''}";"""
@@ -181,8 +183,9 @@ class Docker(RunnerType):
     run_script = ""
     post_script = ""
 
-    def __init__(self, *, image, work_directory=None, launch_directory=None, startup=STARTUP, mount=None,
+    def __init__(self, mounts=None, *, image, work_directory=None, launch_directory=None, startup=STARTUP,
                  pypath=None, envs=None, name=None, use_gpu=False, ipc=None, tty=False, **_):
+        mount_string = " ".join([m.docker_mount for m in mounts])
         self.setup_script = f"""
             # sudo service docker start # this is optional.
             # docker pull {image}
@@ -213,7 +216,7 @@ class Docker(RunnerType):
                 {test_gpu if use_gpu else ""}
                 {remove_by_name}
                 echo 'Now run docker'
-                {envs if envs else ""} {docker_cmd} run -i{"t" if tty else ""} {wd_config} {ipc_config} {mount} --name '{docker_container_name}' \\
+                {envs if envs else ""} {docker_cmd} run -i{"t" if tty else ""} {wd_config} {ipc_config} {mount_string} --name '{docker_container_name}' \\
                 {image} /bin/bash -c '{cmd}'
                 """
 

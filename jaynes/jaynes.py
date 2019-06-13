@@ -358,7 +358,7 @@ def run(fn, *args, __run_config=None, **kwargs, ):
         _['launch_directory'] = os.getcwd()
 
     j = deepcopy(RUN.J)
-    j.set_runner(Runner(**_, mount=" ".join([m.docker_mount for m in RUN.config['mounts']]), ))
+    j.set_runner(Runner(**_, mounts=RUN.config.get('mounts', []), ))
     j.runner.run(fn, *args, **kwargs)
 
     # config.HOST
