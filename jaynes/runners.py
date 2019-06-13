@@ -53,6 +53,7 @@ class Slurm(RunnerType):
             n_cpu: 40
             n_gpu: 0
 
+    :param mounts: list, reserved by jaynes to pass in the mount objects.
     :param pypath: bool, whether this mounting point is included as a part of the python path
     :param setup: setup script, run in the host to setup the environments
     :param startup: startup script, run inside the :code:`srun` session, before your code is boostrapped.
@@ -108,6 +109,7 @@ class Simple(RunnerType):
     """
     Simple runner, good for running things locally.
 
+    :param mounts: list, reserved by jaynes to pass in the mount objects.
     :param pypath:
     :param startup:
     :param mount:
@@ -166,7 +168,8 @@ class Docker(RunnerType):
             ipc: host
             use_gpu: false
 
-    :param image:
+    :param image: string for the docker image to use.
+    :param mounts: list, reserved by jaynes to pass in the mount objects.
     :param startup: the script you want to run first INSIDE docker
     :param mount:
     :param pypath:
@@ -183,7 +186,7 @@ class Docker(RunnerType):
     run_script = ""
     post_script = ""
 
-    def __init__(self, mounts=None, *, image, work_directory=None, launch_directory=None, startup=STARTUP,
+    def __init__(self, *, image, mounts=None, work_directory=None, launch_directory=None, startup=STARTUP,
                  pypath=None, envs=None, name=None, use_gpu=False, ipc=None, tty=False, **_):
         mount_string = " ".join([m.docker_mount for m in mounts])
         self.setup_script = f"""
