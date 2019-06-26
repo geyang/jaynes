@@ -4,9 +4,6 @@ from uuid import uuid4
 from .constants import JAYNES_PARAMS_KEY
 from .param_codec import serialize
 
-# default startup script. At minimum install jaynes.
-STARTUP = 'pip install jaynes awscli -q'
-
 
 class RunnerType:
     @classmethod
@@ -72,7 +69,7 @@ class Slurm(RunnerType):
     run_script = ""
     post_script = ""
 
-    def __init__(self, *, mounts=None, pypath="", setup="", startup=STARTUP, launch_directory=None, envs=None,
+    def __init__(self, *, mounts=None, pypath="", setup="", startup=None, launch_directory=None, envs=None,
                  n_gpu=None,
                  partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, **options):
         launch_directory = launch_directory or os.getcwd()
@@ -121,11 +118,13 @@ class Simple(RunnerType):
     run_script = ""
     post_script = ""
 
-    def __init__(self, *, mounts=None, pypath="", launch_directory=None, startup=STARTUP, envs=None, use_gpu=False,
-                 **_):
+    def __init__(self, *, mounts=None, pypath="", launch_directory=None, setup=None, startup=None, envs=None,
+                 use_gpu=False, verbose=None, **_):
         launch_directory = launch_directory or os.getcwd()
         entry_script = "python -u -m jaynes.entry"
-        cmd = f"""printf "\\e[1;34m%-6s\\e[m" "Running on remote host {' (gpu)' if use_gpu else ''}";"""
+        cmd = ""
+        if verbose:
+            cmd += f"""printf "\\e[1;34m%-6s\\e[m" "Running on remote host {' (gpu)' if use_gpu else ''}";"""
         cmd += (startup.strip() + ';') if startup else ''
         cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath};"
         cmd += f"""{"cd '{}';".format(launch_directory) if launch_directory else ""}"""
@@ -136,6 +135,7 @@ class Simple(RunnerType):
                 """
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""
+                {setup or ""}
                 {test_gpu if use_gpu else ""}
                 {envs if envs else ""} /bin/bash -c '{cmd}'
                 """
@@ -186,7 +186,7 @@ class Docker(RunnerType):
     run_script = ""
     post_script = ""
 
-    def __init__(self, *, image, mounts=None, work_directory=None, launch_directory=None, startup=STARTUP,
+    def __init__(self, *, image, mounts=None, work_directory=None, launch_directory=None, startup=None,
                  pypath=None, envs=None, name=None, use_gpu=False, ipc=None, tty=False, **_):
         mount_string = " ".join([m.docker_mount for m in mounts])
         self.setup_script = f"""

@@ -37,6 +37,34 @@ class Jaynes:
     #     for m in self.mounts:
     #         self.upload_mount(m)
 
+    host_unpack_script = None
+
+    def make_host_unpack_script(self, log_dir="/tmp/jaynes-mount", delay=None, verbose=False, dry=False):
+        assert self.host_unpack_script is None, "make sure ran only once"
+        # the log_dir is primarily used for the run script. Therefore it should use ued here instead.
+        log_path = os.path.join(log_dir, "jaynes-launch.log")
+        error_path = os.path.join(log_dir, "jaynes-launch.err.log")
+
+        host_setup = "\n".join(
+            [m.host_setup for m in self.mounts if hasattr(m, "host_setup") and m.host_setup]
+        )
+
+        self.host_unpack_script = dedent(f"""
+        #!/bin/bash
+        # to allow process substitution
+        set +o posix
+        mkdir -p {log_dir}
+        {{
+            # host_setup
+            {host_setup}
+            
+            # Now sleep before ending this script
+            sleep {delay}
+        }} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
+        """).strip()
+
+        return self
+
     def launch_local_docker(self, log_dir="/tmp/jaynes-mount", delay=None, verbose=False, dry=False):
         # the log_dir is primarily used for the run script. Therefore it should use ued here instead.
         log_path = os.path.join(log_dir, "jaynes-launch.log")
@@ -45,8 +73,8 @@ class Jaynes:
         upload_script = '\n'.join(
             [m.upload_script for m in self.mounts if hasattr(m, "upload_script") and m.upload_script]
         )
-        remote_setup = "\n".join(
-            [m.remote_setup for m in self.mounts if hasattr(m, "remote_setup") and m.remote_setup]
+        host_setup = "" if self.host_unpack_script else "\n".join(
+            [m.host_setup for m in self.mounts if hasattr(m, "host_setup") and m.host_setup]
         )
 
         remote_script = dedent(f"""
@@ -55,12 +83,8 @@ class Jaynes:
         set +o posix
         mkdir -p {log_dir}
         {{
-            # clear main_log
-            truncate -s 0 {log_path}
-            truncate -s 0 {error_path}
             
-            # remote_setup
-            {remote_setup}
+            {host_setup}
 
             # upload_script
             {upload_script}
@@ -77,6 +101,8 @@ class Jaynes:
         if not dry:
             ck(remote_script, shell=True)
         return self
+
+    launch_script = None
 
     def make_host_script(self, log_dir, setup=None, terminate_after=False, delay=None,
                          instance_tag=None, region=None):
@@ -97,17 +123,13 @@ class Jaynes:
         upload_script = '\n'.join(
             [m.upload_script for m in self.mounts if hasattr(m, "upload_script") and m.upload_script]
         )
-        remote_setup = "\n".join(
+        # does not unpack if the self.host_unpack_script has already been generated.
+        host_unpack_script = "" if self.host_unpack_script else "\n".join(
             [m.host_setup for m in self.mounts if hasattr(m, "host_setup") and m.host_setup]
         )
         if instance_tag:
-            assert len(instance_tag) <= 128, "Error: aws limits instance tag to 128 unicode characters."
+            assert len(instance_tag) <= 128, "Error: ws limits instance tag to 128 unicode characters."
 
-        setup = setup or f"""
-            if ! type aws > /dev/null; then
-                pip install awscli --upgrade --user
-            fi
-        """
         if instance_tag:
             assert region, "region need to be specified if instance tag is given."
         if terminate_after:
@@ -121,8 +143,8 @@ class Jaynes:
                 aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=exp_prefix,Value={instance_tag}' --region {region};
             fi
         """
-        # TODO: path.join is running on local computer, so it might not be quite right if remote is say windows.
-        # note: dedent is required by aws EC2.
+        # NOTE: path.join is running on local computer, so it might not be quite right if remote is say windows.
+        # NOTE: dedent is required by aws EC2.
         # noinspection PyAttributeOutsideInit
         self.launch_script = dedent(f"""
         #!/bin/bash
@@ -131,16 +153,13 @@ class Jaynes:
         mkdir -p {log_dir}
         JAYNES_LOG_DIR={log_dir}
         {{
-            # clear main_log
-            truncate -s 0 {log_path}
-            truncate -s 0 {error_path}
             
-            {setup}
+            {setup or ""}
             {tag_current_instance if instance_tag else ""}
             
-            # remote_setup
-            {remote_setup}
-            # upload_script
+            {host_unpack_script}
+            
+            # upload_script from within the host.
             {upload_script}
 
             # todo: include this inside the runner script.
@@ -173,19 +192,26 @@ class Jaynes:
         """
         tf = tempfile.NamedTemporaryFile(prefix="jaynes_launcher-", suffix=".sh", delete=False)
         with open(tf.name, 'w') as f:
-            script_name = os.path.basename(tf.name)
-            # note: kill requires sudo
-            f.write(self.launch_script + "\n"
-            f"sudo kill $(ps aux | grep '{script_name}' | awk '{{print $2}}')\n"
-            f"echo 'clean up all startup script processes'\n")
+            _ = os.path.basename(tf.name)  # fixit: does kill require sudo?
+            cleanup_script = dedent(f"""
+            PROCESSES=$(ps aux | grep '[{_[0]}]{_[1:]}' | awk '{{print $2}}')
+            if [ $PROCESSES ] 
+            then
+            {"sudo " if sudo else ""}kill $PROCESSES
+            {f"echo 'cleaned up after {_}" if verbose else ""}
+            fi 
+            """)
+            f.write(self.launch_script + (cleanup_script if detached else ""))
         tf.file.close()
 
-        upload_script, launch = ssh_remote_exec(username, ip, tf.name, port=port, pem=pem, sudo=sudo, )
+        prelaunch_upload_script, launch = ssh_remote_exec(username, ip, tf.name, port=port, pem=pem, sudo=sudo, )
 
         if not dry:
-            if upload_script:
+            # note: first pre-upload the script
+            if prelaunch_upload_script:
                 # done: separate out the two commands
-                ck(upload_script, verbose=verbose, shell=True)
+                ck(prelaunch_upload_script, verbose=verbose, shell=True)
+            # note: Then launch the job
             if detached:
                 import sys
                 popen(launch, verbose=verbose, shell=True, stdout=sys.stdout, stderr=sys.stderr)
@@ -193,13 +219,9 @@ class Jaynes:
                 ck(launch, verbose=verbose, shell=True)
 
         elif verbose:
-            if upload_script:
-                print(upload_script)
-            print(launch)
-
-        import time
-        time.sleep(0.1)
-        os.remove(tf.name)
+            if prelaunch_upload_script:
+                print("script upload:\n", prelaunch_upload_script)
+            print("launch script:\n", launch)
 
     def launch_ec2(self, region, image_id, instance_type, key_name, security_group, spot_price=None,
                    iam_instance_profile_arn=None, verbose=False, dry=False):
@@ -341,7 +363,7 @@ def run(fn, *args, __run_config=None, **kwargs, ):
 
     # config.RUNNER
     Runner, runner_kwargs = RUN.config.get('runner')
-    # interpolaiton context
+    # interpolation context
     context = RUN.config.copy()
     context['run'] = SimpleNamespace(
         cwd=os.getcwd(),
@@ -357,19 +379,31 @@ def run(fn, *args, __run_config=None, **kwargs, ):
     if 'launch_directory' not in _:
         _['launch_directory'] = os.getcwd()
 
-    j = deepcopy(RUN.J)
+    j = RUN.J
     j.set_runner(Runner(**_, mounts=RUN.config.get('mounts', []), ))
     j.runner.run(fn, *args, **kwargs)
 
     # config.HOST
     host_config = RUN.config.get('host', {})
-    j.make_host_script(log_dir="~/debug-outputs", **host_config)
 
+    launch_config = RUN.config['launch']
+
+    if launch_config['type'].startswith('ssh') and j.host_unpack_script is None:
+
+        j.make_host_unpack_script(log_dir="~/debug-outputs", **host_config)
+        if RUN.config.get('verbose'):
+            print(j.host_unpack_script)
+            print('Upload Code')
+        j.launch_script = j.host_unpack_script
+        j.ssh(**omit(launch_config, 'type', 'detatched'), detached=False)
+        j.launch_script = None
+
+    # config.HOST
+    j.make_host_script(log_dir="~/debug-outputs", **host_config)
     if RUN.config.get('verbose'):
         print(j.launch_script)
 
     # config.LAUNCH
-    launch_config = RUN.config['launch']
     _ = getattr(j, launch_config['type'])(**omit(launch_config, 'type'))
     if RUN.config.get('verbose'):
         cprint(f"launched! {_}", "green")

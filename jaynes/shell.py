@@ -28,4 +28,4 @@ def ck(cmd, *args, verbose=False, **kwargs):
     try:
         subprocess.check_call(cmd, *args, **kwargs)
     except subprocess.CalledProcessError as e:
-        print(e.output)
+        print(e)

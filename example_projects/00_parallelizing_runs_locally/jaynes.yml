@@ -1,0 +1,43 @@
+# Example Configuration for running parallel jobs locally
+#
+# To run parallelly, we ssh to local host. You can setup password-less
+# local ssh with instructions here: https://stackoverflow.com/a/16651742/1560241
+#
+version: 0
+hosts:
+  fair: &local
+    ip: localhost
+    port: 22
+    username: geyang
+mounts:
+  - !mounts.SSHCode
+    <<: *local
+    local_path: .
+    host_path: /Users/geyang/jaynes-mounts/{now:%Y-%m-%d}/{now:%H%M%S.%f}/example
+    pypath: true
+    excludes: >-
+      --exclude='data'
+      --exclude='samples'
+      --exclude='figures'
+      --exclude='results'
+      --exclude='analysis'
+      --exclude='*__pycache__'
+      --exclude='*.git'
+      --exclude='*.idea'
+      --exclude='*.egg-info'
+      --exclude='*.pkl'
+    compress: true
+runner:
+  !runners.Simple
+  envs: "LANG=utf-8"
+  pypath: "{mounts[0].container_path}"
+  setup: |
+    source ~/.bash_profile
+    conda activate plan2vec
+  startup: # which python
+  launch_directory: "{mounts[0].container_path}"
+  ipc: host
+  use_gpu: false
+launch:
+  type: ssh
+  <<: *local

@@ -193,7 +193,7 @@ class SSHCode:
     :return: self
     """
 
-    def __init__(self, *, ip, port, username, pem, local_path, host_path=None, remote_tar=None,
+    def __init__(self, *, ip, port, username, pem=None, local_path=None, host_path=None, remote_tar=None,
                  container_path=None, pypath=False, excludes=None, file_mask=None, name=None, compress=True):
         # I fucking hate the behavior of python defaults. -- GY
         file_mask = file_mask or "."  # file_mask can Not be None or "".
