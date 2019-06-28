@@ -57,9 +57,7 @@ class Jaynes:
         {{
             # host_setup
             {host_setup}
-            
-            # Now sleep before ending this script
-            sleep {delay}
+            {f"sleep {delay}" if delay else ""}
         }} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
         """).strip()
 
@@ -92,8 +90,7 @@ class Jaynes:
             {self.runner.setup_script}
             {self.runner.run_script}
             
-            # Now sleep before ending this script
-            sleep {delay}
+            {f"sleep {delay}" if delay else ""}
         }} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
         """).strip()
         if verbose:

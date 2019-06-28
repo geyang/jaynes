@@ -142,7 +142,7 @@ class S3Output:
                 mkdir -p '{local_path}'
                 while true; do
                     echo "downloading..." {download_script}
-                    sleep {interval}
+                    {f"sleep {interval}" if interval else ""}
                 done & echo 'sync {local_path} initiated'
             """
         else:
@@ -156,7 +156,7 @@ class S3Output:
                 echo "made main_log directory" """ + ("" if not sync_s3 else f"""
                 while true; do
                     echo "uploading..." {self.upload_script}
-                    sleep {interval}
+                    {f"sleep {interval}" if interval else ""}
                 done & echo "sync {host_path} initiated" 
                 while true; do
                     if [ -z $(curl -Is http://169.254.169.254/latest/meta-data/spot/termination-time | head -1 | grep 404 | cut -d \  -f 2) ]
