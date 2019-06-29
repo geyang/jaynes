@@ -170,17 +170,20 @@ class Jaynes:
 
         return self
 
-    def launch_ssh(self, ip, port=None, username="ubuntu", pem=None, sudo=False,
-                   detached=True, dry=False, verbose=False):
+    def launch_ssh(self, ip, port=None, username="ubuntu", pem=None, profile=None,
+                   sudo=False, detached=True, dry=False, verbose=False):
         """
         run launch_script remotely by ip_address. First saves the run script locally as a file, then use
         scp to transfer the script to remote instance then run.
 
-        :param sudo:
         :param username:
         :param ip:
         :param port:
         :param pem:
+        :param sudo:
+        :param profile: Suppose you want to run bash as a different user after ssh in, you can use this option to
+                        pass in a different user name. This is inserted in the ssh boostrapping command, so the script
+                        you run will not be affected (and will take up this user's login envs instead).
         :param detached: use call instead of checkcall, allowing the python program to continue execution w/o
                          blocking. Should the default.
         :param dry:
@@ -201,7 +204,8 @@ class Jaynes:
             f.write(self.launch_script + (cleanup_script if detached else ""))
         tf.file.close()
 
-        prelaunch_upload_script, launch = ssh_remote_exec(username, ip, tf.name, port=port, pem=pem, sudo=sudo, )
+        prelaunch_upload_script, launch = ssh_remote_exec(username, ip, tf.name,
+                                                          port=port, pem=pem, profile=profile, sudo=sudo)
 
         if not dry:
             # note: first pre-upload the script
@@ -351,7 +355,6 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
 
 
 def run(fn, *args, __run_config=None, **kwargs, ):
-    from copy import deepcopy
     if not RUN.J:
         config()
 

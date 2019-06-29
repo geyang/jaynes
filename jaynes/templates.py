@@ -10,14 +10,18 @@ ec2_terminate = lambda region, delay=30: f"""
         """
 
 
-def ssh_remote_exec(user, ip_address, script_path, port=None, pem=None, sudo=True,
-                    remote_script_dir=None):
+def ssh_remote_exec(user, ip_address, script_path, port=None, pem=None,
+                    profile=None, sudo=True, remote_script_dir=None):
     """
     run script remotely via ssh agent. 
 
     :param user: username for the ssh login
     :param ip_address: address for the host
     :param pem: path to the public key for this login
+
+    :param profile: the user profile you want to run the remote ssh command with.
+            Calls "su - u {profile} -i `bash ...`" instead.
+
     :param script_path: Something like:
                     >   /var/folders/q9/qh3g18bs0vq3xjqtvv636vfmx6y0dw/T/jaynes_launcher-6s2il8sm.sh
 
@@ -56,7 +60,10 @@ def ssh_remote_exec(user, ip_address, script_path, port=None, pem=None, sudo=Tru
         remote_path = pathJoin(remote_script_dir, os.path.basename(script_path))
         send_file = f"""ssh {options} {user}@{ip_address} {port_} {pem_} 'mkdir -p {remote_script_dir}'\n""" \
             f"""scp {port_.upper()} {pem_} {script_path} {user}@{ip_address}:{remote_script_dir}"""
-        launch = f"""ssh {options} {user}@{ip_address} {port_} {pem_} '{sudo_} bash {remote_path}'"""
+        if profile:
+            launch = f"""ssh {options} {user}@{ip_address} {port_} {pem_} \"sudo - u {profile} -i '{sudo_} bash {remote_path}'\""""
+        else:
+            launch = f"""ssh {options} {user}@{ip_address} {port_} {pem_} '{sudo_} bash {remote_path}'"""
         return send_file, launch
     else:  # `pipe` mode
         launch = f"""ssh {options} {user}@{ip_address} {port_} {pem_} '{sudo_} bash -s' < {script_path}"""
