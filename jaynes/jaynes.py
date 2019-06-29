@@ -101,7 +101,7 @@ class Jaynes:
 
     launch_script = None
 
-    def make_host_script(self, log_dir, setup=None, terminate_after=False, delay=None,
+    def make_host_script(self, log_dir="~/debug-outputs", setup=None, terminate_after=False, delay=None,
                          instance_tag=None, region=None):
         """
         function to make the host script
@@ -315,6 +315,8 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
             if hasattr(c, 'from_yaml'):
                 yaml.SafeLoader.add_constructor("!runners." + k, c.from_yaml)
 
+        yaml.SafeLoader.add_constructor("!host", hydrate(lambda **args: args, ctx))
+
         with open(config_path, 'r') as f:
             raw = yaml.safe_load(f)
 
@@ -390,7 +392,7 @@ def run(fn, *args, __run_config=None, **kwargs, ):
 
     if launch_config['type'].startswith('ssh') and j.host_unpack_script is None:
 
-        j.make_host_unpack_script(log_dir="~/debug-outputs", **host_config)
+        j.make_host_unpack_script(**host_config)
         if RUN.config.get('verbose'):
             print(j.host_unpack_script)
             print('Upload Code')
@@ -399,7 +401,7 @@ def run(fn, *args, __run_config=None, **kwargs, ):
         j.launch_script = None
 
     # config.HOST
-    j.make_host_script(log_dir="~/debug-outputs", **host_config)
+    j.make_host_script(**host_config)
     if RUN.config.get('verbose'):
         print(j.launch_script)
 
