@@ -172,7 +172,7 @@ class Jaynes:
         return self
 
     def launch_ssh(self, ip, port=None, username="ubuntu", pem=None, profile=None,
-                   password=None, sudo=False, detached=True, dry=False, verbose=False):
+                   password=None, sudo=False, cleanup=True, block=False, dry=False, verbose=False):
         """
         run launch_script remotely by ip_address. First saves the run script locally as a file, then use
         scp to transfer the script to remote instance then run.
@@ -182,6 +182,7 @@ class Jaynes:
         :param port:
         :param pem:
         :param sudo:
+        :param cleanup: whther to attach clean up script at the end of the launch scrip
         :param profile: Suppose you want to run bash as a different user after ssh in, you can use this option to
                         pass in a different user name. This is inserted in the ssh boostrapping command, so the script
                         you run will not be affected (and will take up this user's login envs instead).
@@ -201,7 +202,7 @@ class Jaynes:
             {f"echo 'cleaned up after {_}" if verbose else ""}
             fi 
             """)
-            f.write(self.launch_script + (cleanup_script if detached else ""))
+            f.write(self.launch_script + cleanup_script if cleanup else "")
         tf.file.close()
 
         prelaunch_upload_script, launch = ssh_remote_exec(username, ip, tf.name,
@@ -209,7 +210,7 @@ class Jaynes:
                                                           profile=profile,
                                                           require_password=(password is not None),
                                                           sudo=sudo)
-        
+
         # todo: use pipe back to send binary from RPC calls
         if dry:
             if prelaunch_upload_script:
@@ -224,14 +225,19 @@ class Jaynes:
             if password:
                 p.communicate(bytes(f"{password}\n"))
 
-        import subprocess
-        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=sys.stdout, stderr=sys.stderr)
-
         pipe_in = "" if password is None else password + "\n"
         if not prelaunch_upload_script:
             pipe_in = pipe_in + self.launch_script + "\n"
-        # not supported. stdout, stderr, requires subprocess.PIPE for the two.
-        return p.communicate(bytes(pipe_in, 'utf-8'))
+
+        import subprocess
+        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=sys.stdout, stderr=sys.stderr)
+        if block:
+            # todo:
+            # not supported. stdout, stderr, requires subprocess.PIPE for the two.
+            return p.communicate(bytes(pipe_in, 'utf-8'))
+        else:
+            p.stdin.write(bytes(pipe_in, 'utf-8'))
+            p.stdin.flush()
 
     def launch_ec2(self, region, image_id, instance_type, key_name, security_group, spot_price=None,
                    iam_instance_profile_arn=None, verbose=False, dry=False):
@@ -362,6 +368,7 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
 
     RUN.config.update(ctx)
     RUN.J.set_mount(*RUN.config.get("mounts"))
+    RUN.config
     RUN.J.upload_mount(verbose=RUN.config.get('verbose'))
 
 
@@ -402,11 +409,11 @@ def run(fn, *args, __run_config=None, **kwargs, ):
     if launch_config['type'].startswith('ssh') and j.host_unpack_script is None:
 
         j.make_host_unpack_script(**host_config)
-        if RUN.config.get('verbose'):
+        if RUN.config.get('verbose', False):
             print(j.host_unpack_script)
             print('Upload Code')
         j.launch_script = j.host_unpack_script
-        j.ssh(**omit(launch_config, 'type', 'detatched'), detached=False)
+        j.ssh(**omit(launch_config, 'type', 'block'), block=True)
         j.launch_script = None
 
     # config.HOST
