@@ -183,6 +183,7 @@ class SSHCode:
 
 
     :param profile: The profile to use for untaring the code ball. Not used.
+    :param password: The password to use for untaring the code ball. Not used.
     :param local_path: path to the local directory. Doesn't have to be absolute.
     :param s3_prefix: The s3 prefix including the s3: protocol, the bucket, and the path prefix.
     :param host_path: The path on the remote instance. Default /tmp/{uuid4()}
@@ -194,7 +195,8 @@ class SSHCode:
     :return: self
     """
 
-    def __init__(self, *, ip, port, username, pem=None, profile=None, local_path=None, host_path=None, remote_tar=None,
+    def __init__(self, *, ip, port, username, pem=None, profile=None, password=None, local_path=None,
+                 host_path=None, remote_tar=None,
                  container_path=None, pypath=False, excludes=None, file_mask=None, name=None, compress=True):
         # I fucking hate the behavior of python defaults. -- GY
         file_mask = file_mask or "."  # file_mask can Not be None or "".

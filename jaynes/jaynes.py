@@ -1,6 +1,7 @@
 import base64
 import glob
 import os
+import sys
 import tempfile
 from textwrap import dedent
 from types import SimpleNamespace
@@ -171,7 +172,7 @@ class Jaynes:
         return self
 
     def launch_ssh(self, ip, port=None, username="ubuntu", pem=None, profile=None,
-                   sudo=False, detached=True, dry=False, verbose=False):
+                   password=None, sudo=False, detached=True, dry=False, verbose=False):
         """
         run launch_script remotely by ip_address. First saves the run script locally as a file, then use
         scp to transfer the script to remote instance then run.
@@ -184,8 +185,7 @@ class Jaynes:
         :param profile: Suppose you want to run bash as a different user after ssh in, you can use this option to
                         pass in a different user name. This is inserted in the ssh boostrapping command, so the script
                         you run will not be affected (and will take up this user's login envs instead).
-        :param detached: use call instead of checkcall, allowing the python program to continue execution w/o
-                         blocking. Should the default.
+        :param password: The password for the user in case it is needed.
         :param dry:
         :param verbose:
         :return:
@@ -205,24 +205,33 @@ class Jaynes:
         tf.file.close()
 
         prelaunch_upload_script, launch = ssh_remote_exec(username, ip, tf.name,
-                                                          port=port, pem=pem, profile=profile, sudo=sudo)
-
-        if not dry:
-            # note: first pre-upload the script
-            if prelaunch_upload_script:
-                # done: separate out the two commands
-                ck(prelaunch_upload_script, verbose=verbose, shell=True)
-            # note: Then launch the job
-            if detached:
-                import sys
-                popen(launch, verbose=verbose, shell=True, stdout=sys.stdout, stderr=sys.stderr)
-            else:
-                ck(launch, verbose=verbose, shell=True)
-
-        elif verbose:
+                                                          port=port, pem=pem,
+                                                          profile=profile,
+                                                          require_password=(password is not None),
+                                                          sudo=sudo)
+        
+        # todo: use pipe back to send binary from RPC calls
+        if dry:
             if prelaunch_upload_script:
                 print("script upload:\n", prelaunch_upload_script)
             print("launch script:\n", launch)
+            return
+
+        # note: first pre-upload the script
+        if prelaunch_upload_script:
+            # done: separate out the two commands
+            p = ck(prelaunch_upload_script, verbose=verbose, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+            if password:
+                p.communicate(bytes(f"{password}\n"))
+
+        import subprocess
+        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=sys.stdout, stderr=sys.stderr)
+
+        pipe_in = "" if password is None else password + "\n"
+        if not prelaunch_upload_script:
+            pipe_in = pipe_in + self.launch_script + "\n"
+        # not supported. stdout, stderr, requires subprocess.PIPE for the two.
+        return p.communicate(bytes(pipe_in, 'utf-8'))
 
     def launch_ec2(self, region, image_id, instance_type, key_name, security_group, spot_price=None,
                    iam_instance_profile_arn=None, verbose=False, dry=False):
