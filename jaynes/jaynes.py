@@ -272,13 +272,6 @@ class Jaynes:
     ec2 = launch_ec2
 
 
-import yaml
-from termcolor import cprint
-from . import mounts, runners
-from datetime import datetime
-from uuid import uuid4
-
-
 class RUN:
     project_root = None
     raw = None
@@ -302,6 +295,12 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
                 the string interpolation context
     :return: None
     """
+    import yaml
+    from termcolor import cprint
+    from . import mounts, runners
+    from datetime import datetime
+    from uuid import uuid4
+
     RUN.mode = mode
 
     ctx = dict(env=SimpleNamespace(**os.environ), now=datetime.now(), uuid=uuid4(), **ext)
@@ -368,11 +367,14 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
 
     RUN.config.update(ctx)
     RUN.J.set_mount(*RUN.config.get("mounts"))
-    RUN.config
     RUN.J.upload_mount(verbose=RUN.config.get('verbose'))
 
 
 def run(fn, *args, __run_config=None, **kwargs, ):
+    from termcolor import cprint
+    from datetime import datetime
+    from uuid import uuid4
+
     if not RUN.J:
         config()
 
@@ -431,6 +433,8 @@ def run(fn, *args, __run_config=None, **kwargs, ):
 def listen(timeout=None):
     """Just a for-loop, to keep ths process connected to the ssh session"""
     import math, time
+    from termcolor import cprint
+
     if timeout:
         time.sleep(timeout)
         cprint(f'jaynes.listen(timeout={timeout}) is now timed out. remote routine is still running.', 'green')
