@@ -71,25 +71,43 @@ class Slurm(RunnerType):
 
     def __init__(self, *, mounts=None, pypath="", setup="", startup=None, launch_directory=None, envs=None,
                  n_gpu=None,
-                 partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, **options):
+                 partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, args=None, **options):
         launch_directory = launch_directory or os.getcwd()
-        entry_script = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}} python -u -m jaynes.entry"
         # --get-user-env
         setup_cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running on login-node"\n"""
         setup_cmd += (setup.strip() + '\n') if setup else ''
         setup_cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath}\n"
 
-        cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker";"""
-        cmd += (startup.strip() + ";") if startup else ""
-        cmd += f"""{"cd '{}';".format(launch_directory) if launch_directory else ""}"""
-
         # some cluster only allows --gres=gpu:[1-]
         gres = f"--gres=gpu:{n_gpu}" if n_gpu else ""
         extra_options = " ".join([f"--{k.replace('_', '-')}='{v}'" for k, v in options.items()])
-        slurm_cmd = f"srun {gres} --partition={partition} --time={time_limit} " \
-            f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
-            f"--comment='{comment}' {extra_options} /bin/bash -l -c '{cmd} {entry_script}'"
-        # note: always connect the docker to stdin and stdout.
+        if args:
+            extra_options = "".join([f"--{a} " for a in args]) + extra_options
+        if startup:
+            """
+            use bash mode if there is a startup script. This is not supported on some clusters.
+            For example in vector institute's cluster this does not direct outputs to the 
+            stdout.
+            """
+            entry_script = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}} python -u -m jaynes.entry"
+            
+            cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker";"""
+            cmd += (startup.strip() + ";") if startup else ""
+            cmd += f"""{"cd '{}';".format(launch_directory) if launch_directory else ""}"""
+
+            slurm_cmd = f"srun {gres} --partition={partition} --time={time_limit} " \
+                        f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
+                        f"--comment='{comment}' {extra_options} /bin/bash -l -c '{cmd}; {entry_script}'"
+        else:
+            """
+            call the python entry script directly, does not work on the FAIR cluster.
+            """
+            entry_env = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}}"
+            entry_script = f"python -u -m jaynes.entry"
+            slurm_cmd = f"{entry_env} srun {gres} --partition={partition} --time={time_limit} " \
+                        f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
+                        f"--comment='{comment}' {extra_options} {entry_script}"
+            
         self.run_script_thunk = f"""
                 {envs if envs else ""} 
                 {setup_cmd}

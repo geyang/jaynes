@@ -195,7 +195,7 @@ class SSHCode:
     :return: self
     """
 
-    def __init__(self, *, ip, port, username, pem=None, profile=None, password=None, local_path=None,
+    def __init__(self, *, username, ip, pem=None, port=None, profile=None, password=None, local_path=None,
                  host_path=None, remote_tar=None,
                  container_path=None, pypath=False, excludes=None, file_mask=None, name=None, compress=True):
         # I fucking hate the behavior of python defaults. -- GY
@@ -222,7 +222,13 @@ class SSHCode:
         # scp does not allow file rename.
         remote_tar_dir = os.path.dirname(remote_tar)
         scp_script = f"scp {port_.upper()} {pem} {local_tar} {username}@{ip}:{remote_tar_dir}"
-        rsync_script = f"rsync -az -e 'ssh {port_} {pem_}' {local_tar} {username}@{ip}:{remote_tar}"
+        ssh_string = f"'ssh {port_} {pem_}'" if port_ or pem_ else 'ssh'
+        rsync_script = f"rsync -az -e {ssh_string} {local_tar} {username}@{ip}:{remote_tar}"
+        if password is not None:  # note: now supports password log in!
+            # rsync_script = f'expect <<EOF\nspawn {rsync_script};expect \"password:\";send \"{password}\\r\"\nEOF'
+            # need to install sshpass from:
+            # https://gist.github.com/arunoda/7790979
+            rsync_script = f"sshpass -p '{password}' {rsync_script}"
 
         self.local_script = f"""
                 type gtar >/dev/null 2>&1 && alias tar=`which gtar`

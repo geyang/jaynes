@@ -11,10 +11,12 @@ ec2_terminate = lambda region, delay=30: f"""
 
 
 def ssh_remote_exec(user, ip_address, script_path, port=None, pem=None,
-                    profile=None, require_password=False, sudo=True, remote_script_dir=None):
+                    profile=None, password=None, require_password=False, sudo=True, remote_script_dir=None):
     """
     run script remotely via ssh agent. 
 
+    :param password: password, if the *ssh session* requires a password
+    :param require_password: if the bash script that needs to be ran requires password
     :param user: username for the ssh login
     :param ip_address: address for the host
     :param pem: path to the public key for this login
@@ -56,7 +58,10 @@ def ssh_remote_exec(user, ip_address, script_path, port=None, pem=None,
 
     :return:
     """
-    options = "-o 'StrictHostKeyChecking=no'"
+
+    options = "" if password is None else "-T "
+    options += "-o 'StrictHostKeyChecking=no'"
+
     port_ = "" if port is None else f"-p {port}"
     pem_ = f'-i {pem}' if pem else ''
     sudo_ = 'sudo -n -s' if sudo else ""
@@ -65,15 +70,20 @@ def ssh_remote_exec(user, ip_address, script_path, port=None, pem=None,
         remote_path = pathJoin(remote_script_dir, os.path.basename(script_path))
         # this should be factorized out.
         send_file = f"""ssh {options} {user}@{ip_address} {port_} {pem_} 'mkdir -p {remote_script_dir}'\n""" \
-            f"""scp {port_.upper()} {pem_} {script_path} {user}@{ip_address}:{remote_script_dir}"""
+                    f"""scp {port_.upper()} {pem_} {script_path} {user}@{ip_address}:{remote_script_dir}"""
         if profile:
             launch = f'''ssh {options} {user}@{ip_address} {port_} {pem_} "sudo {"-kS " if require_password else ""}su - {profile}; {sudo_} bash {remote_path}"'''
         else:
             launch = f"""ssh {options} {user}@{ip_address} {port_} {pem_} '{sudo_} bash {remote_path}'"""
+        if password is not None:
+            send_file = f"sshpass -p '{password}' {send_file}"
+            launch = f"sshpass -p '{password}' {launch}"
         return send_file, launch
     else:  # `pipe` mode, requires piping in file from the outside.
         if profile:
             launch = f"""ssh {options} {user}@{ip_address} {port_} {pem_} 'sudo {"-kS " if require_password else ""}su - {profile}; {sudo_} bash -s'"""
         else:
             launch = f"""ssh {options} {user}@{ip_address} {port_} {pem_} '{sudo_} bash -s'"""
+        if password is not None:
+            launch = f"sshpass -p '{password}' {launch}"
         return None, launch

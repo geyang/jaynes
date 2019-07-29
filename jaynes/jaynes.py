@@ -32,7 +32,7 @@ class Jaynes:
                 print('this package is already uploaded')
             else:
                 self._uploaded.append(mount)
-                ck(mount.local_script, verbose=verbose, shell=True)
+                ck(dedent(mount.local_script or ""), verbose=verbose, shell=True)
 
     # def run_local_setup(self, verbose=False):
     #     for m in self.mounts:
@@ -208,7 +208,8 @@ class Jaynes:
         prelaunch_upload_script, launch = ssh_remote_exec(username, ip, tf.name,
                                                           port=port, pem=pem,
                                                           profile=profile,
-                                                          require_password=(password is not None),
+                                                          password=password,
+                                                          require_password=(profile is not None),
                                                           sudo=sudo)
 
         # todo: use pipe back to send binary from RPC calls
@@ -222,10 +223,10 @@ class Jaynes:
         if prelaunch_upload_script:
             # done: separate out the two commands
             p = ck(prelaunch_upload_script, verbose=verbose, shell=True, stdout=sys.stdout, stderr=sys.stderr)
-            if password:
+            if profile is not None:
                 p.communicate(bytes(f"{password}\n"))
 
-        pipe_in = "" if password is None else password + "\n"
+        pipe_in = "" if profile is None else f"{password}\n"
         if not prelaunch_upload_script:
             pipe_in = pipe_in + self.launch_script + "\n"
 
@@ -413,7 +414,7 @@ def run(fn, *args, __run_config=None, **kwargs, ):
         j.make_host_unpack_script(**host_config)
         if RUN.config.get('verbose', False):
             print(j.host_unpack_script)
-            print('Upload Code')
+            print('Now Upload Code')
         j.launch_script = j.host_unpack_script
         j.ssh(**omit(launch_config, 'type', 'block'), block=True)
         j.launch_script = None
@@ -434,6 +435,8 @@ def listen(timeout=None):
     """Just a for-loop, to keep ths process connected to the ssh session"""
     import math, time
     from termcolor import cprint
+
+    cprint('Jaynes pipe-back is now listening...', "green")
 
     if timeout:
         time.sleep(timeout)
