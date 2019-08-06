@@ -76,7 +76,7 @@ class Slurm(RunnerType):
         # --get-user-env
         setup_cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running on login-node"\n"""
         setup_cmd += (setup.strip() + '\n') if setup else ''
-        setup_cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath}\n"
+        setup_cmd += f"PYTHONPATH=$PYTHONPATH:{pypath} "
 
         # some cluster only allows --gres=gpu:[1-]
         gres = f"--gres=gpu:{n_gpu}" if n_gpu else ""
@@ -90,7 +90,7 @@ class Slurm(RunnerType):
             stdout.
             """
             entry_script = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}} python -u -m jaynes.entry"
-            
+
             cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker";"""
             cmd += (startup.strip() + ";") if startup else ""
             cmd += f"""{"cd '{}';".format(launch_directory) if launch_directory else ""}"""
@@ -107,12 +107,9 @@ class Slurm(RunnerType):
             slurm_cmd = f"{entry_env} srun {gres} --partition={partition} --time={time_limit} " \
                         f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
                         f"--comment='{comment}' {extra_options} {entry_script}"
-            
-        self.run_script_thunk = f"""
-                {envs if envs else ""} 
-                {setup_cmd}
-                {slurm_cmd}
-                """
+
+        self.run_script_thunk = f""" 
+        {setup_cmd} {envs if envs else ""} {slurm_cmd} """
 
     def run(self, fn, *args, **kwargs):
         encoded_thunk = serialize(fn, args, kwargs)
