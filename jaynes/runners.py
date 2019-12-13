@@ -56,6 +56,7 @@ class Slurm(RunnerType):
     :param startup: startup script, run inside the :code:`srun` session, before your code is boostrapped.
     :param launch_directory: path to the current work directory for :code:`srun`.
     :param envs: string containing the environment variables. Need to be :code:`;` separated, single line.
+    :param entry_script: "python -u -m jaynes.entry"
     :param n_gpu:
     :param partition:
     :param time_limit:
@@ -70,7 +71,7 @@ class Slurm(RunnerType):
     post_script = ""
 
     def __init__(self, *, mounts=None, pypath="", setup="", startup=None, launch_directory=None, envs=None,
-                 n_gpu=None,
+                 n_gpu=None, entry_script=f"python -u -m jaynes.entry",
                  partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, args=None, **options):
         launch_directory = launch_directory or os.getcwd()
         # --get-user-env
@@ -89,7 +90,7 @@ class Slurm(RunnerType):
             For example in vector institute's cluster this does not direct outputs to the 
             stdout.
             """
-            entry_script = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}} python -u -m jaynes.entry"
+            entry_env = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}}"
 
             cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker";"""
             cmd += (startup.strip() + ";") if startup else ""
@@ -97,13 +98,12 @@ class Slurm(RunnerType):
 
             slurm_cmd = f"srun {gres} --partition={partition} --time={time_limit} " \
                         f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
-                        f"--comment='{comment}' {extra_options} /bin/bash -l -c '{cmd}; {entry_script}'"
+                        f"--comment='{comment}' {extra_options} /bin/bash -l -c '{cmd}; {entry_env} {entry_script}'"
         else:
             """
             call the python entry script directly, does not work on the FAIR cluster.
             """
             entry_env = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}}"
-            entry_script = f"python -u -m jaynes.entry"
             slurm_cmd = f"{entry_env} srun {gres} --partition={partition} --time={time_limit} " \
                         f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
                         f"--comment='{comment}' {extra_options} {entry_script}"
@@ -127,6 +127,7 @@ class Simple(RunnerType):
     :param mount:
     :param launch_directory:
     :param envs: Set of environment key and variables, a string
+    :param entry_script: "python -u -m jaynes.entry"
     :param use_gpu:
     """
     setup_script = ""
@@ -134,9 +135,9 @@ class Simple(RunnerType):
     post_script = ""
 
     def __init__(self, *, mounts=None, pypath="", launch_directory=None, setup=None, startup=None, envs=None,
+                 entry_script="python -u -m jaynes.entry",
                  use_gpu=False, verbose=None, **_):
         launch_directory = launch_directory or os.getcwd()
-        entry_script = "python -u -m jaynes.entry"
         cmd = ""
         if verbose:
             cmd += f"""printf "\\e[1;34m%-6s\\e[m" "Running on remote host {' (gpu)' if use_gpu else ''}";"""
@@ -191,6 +192,7 @@ class Docker(RunnerType):
     :param work_directory:
     :param launch_directory:
     :param envs: Set of environment key and variables, a string
+    :param entry_script: "python -u -m jaynes.entry"
     :param name: Name of the docker container instance, use uuid if is None
     :param use_gpu:
     :type ipc: specify ipc for multiprocessing. Typically 'host'
@@ -202,7 +204,8 @@ class Docker(RunnerType):
     post_script = ""
 
     def __init__(self, *, image, mounts=None, work_directory=None, launch_directory=None, startup=None,
-                 pypath=None, envs=None, name=None, use_gpu=False, ipc=None, tty=False, **_):
+                 pypath=None, envs=None, entry_script="python -u -m jaynes.entry", name=None, use_gpu=False, ipc=None,
+                 tty=False, **_):
         mount_string = " ".join([m.docker_mount for m in mounts])
         self.setup_script = f"""
             # sudo service docker start # this is optional.
@@ -210,7 +213,6 @@ class Docker(RunnerType):
         """
         self.docker_image = image
         docker_cmd = "nvidia-docker" if use_gpu else "docker"
-        entry_script = "python -u -m jaynes.entry"
         cmd = f"""echo "Running in docker{' (gpu)' if use_gpu else ''}";"""
         cmd += f"{startup.strip()};" if startup else ''
         cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath};" if pypath else ""
