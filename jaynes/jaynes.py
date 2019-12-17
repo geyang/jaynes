@@ -172,7 +172,7 @@ class Jaynes:
         return self
 
     def launch_ssh(self, ip, port=None, username="ubuntu", pem=None, profile=None,
-                   password=None, sudo=False, cleanup=True, block=False, dry=False, verbose=False):
+                   password=None, sudo=False, cleanup=True, block=False, console_mode=False, dry=False, verbose=False):
         """
         run launch_script remotely by ip_address. First saves the run script locally as a file, then use
         scp to transfer the script to remote instance then run.
@@ -182,7 +182,9 @@ class Jaynes:
         :param port:
         :param pem:
         :param sudo:
-        :param cleanup: whther to attach clean up script at the end of the launch scrip
+        :param cleanup: whether to attach clean up script at the end of the launch scrip
+        :param block: whether wait for p.communication after calling. Blocks further execution.
+        :param console_mode: do not block, do not use stdout.pipe when running from ipython console.
         :param profile: Suppose you want to run bash as a different user after ssh in, you can use this option to
                         pass in a different user name. This is inserted in the ssh boostrapping command, so the script
                         you run will not be affected (and will take up this user's login envs instead).
@@ -231,14 +233,19 @@ class Jaynes:
             pipe_in = pipe_in + self.launch_script + "\n"
 
         import subprocess
-        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=sys.stdout, stderr=sys.stderr)
         if block:
-            # todo:
-            # not supported. stdout, stderr, requires subprocess.PIPE for the two.
+            # todo: not supported. stdout, stderr, requires subprocess.PIPE for the two.
+            p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
             return p.communicate(bytes(pipe_in, 'utf-8'))
+        elif console_mode:
+            p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
         else:
-            p.stdin.write(bytes(pipe_in, 'utf-8'))
-            p.stdin.flush()
+            p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=sys.stdout, stderr=sys.stderr)
+
+        p.stdin.write(bytes(pipe_in, 'utf-8'))
+        p.stdin.flush()
 
     def launch_ec2(self, region, image_id, instance_type, key_name, security_group, spot_price=None,
                    iam_instance_profile_arn=None, verbose=False, dry=False):
@@ -281,6 +288,19 @@ class RUN:
 
     # default value for the run mode
     mode = None
+    __now = None
+
+    @classmethod
+    def now(cls, fmt):
+        from datetime import datetime
+        if cls.__now:
+            return cls.__now.strftime(fmt)
+        cls.__now = datetime.now()
+        return cls.__now.strftime(fmt)
+
+    @classmethod
+    def reset(cls):
+        cls.__now = None
 
 
 def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, **ext):
@@ -302,6 +322,7 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
     from datetime import datetime
     from uuid import uuid4
 
+    RUN.reset()  # reset the clock
     RUN.mode = mode
 
     ctx = dict(env=SimpleNamespace(**os.environ), now=datetime.now(), uuid=uuid4(), **ext)
