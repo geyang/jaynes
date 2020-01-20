@@ -148,15 +148,15 @@ now run in python
 ToDos
 -----
 
--  ☐ more documentation
--  ☐ singularity support
--  ☐ GCE support
--  ☐ support using non-s3 code-block repo.
+-  [ ] more documentation
+-  [ ] singularity support
+-  [ ] GCE support
+-  [ ] support using non-s3 code-block repo.
 
 Done
 ~~~~
 
--  ☒ get the initial template to work
+-  [x] get the initial template to work
 
 Installation
 ------------
