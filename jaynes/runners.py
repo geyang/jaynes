@@ -93,12 +93,13 @@ class Slurm(RunnerType):
             entry_env = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}}"
 
             cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker";"""
+            # todo: change this.
             cmd += (startup.strip() + ";") if startup else ""
             cmd += f"""{"cd '{}';".format(launch_directory) if launch_directory else ""}"""
 
             slurm_cmd = f"srun {gres} --partition={partition} --time={time_limit} " \
                         f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
-                        f"--comment='{comment}' {extra_options} /bin/bash -l -c '{cmd}; {entry_env} {entry_script}'"
+                        f"--comment='{comment}' {extra_options} /bin/bash -l -c '{cmd} {entry_env} {entry_script}'"
         else:
             """
             call the python entry script directly, does not work on the FAIR cluster.
