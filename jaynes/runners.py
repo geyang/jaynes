@@ -196,7 +196,7 @@ class Docker(RunnerType):
     :param entry_script: "python -u -m jaynes.entry"
     :param name: Name of the docker container instance, use uuid if is None
     :param use_gpu:
-    :type ipc: specify ipc for multiprocessing. Typically 'host'
+    :param ipc: specify ipc for multiprocessing. Typically 'host'
     :param tty: almost never used. This is because when this script is ran, it is almost garanteed that the
                 ssh/bash session is not going to be tty.
     """

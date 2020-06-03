@@ -293,9 +293,8 @@ class RUN:
     @classmethod
     def now(cls, fmt):
         from datetime import datetime
-        if cls.__now:
-            return cls.__now.strftime(fmt)
-        cls.__now = datetime.now()
+        if cls.__now is None:
+            cls.__now = datetime.now()
         return cls.__now.strftime(fmt)
 
     @classmethod
@@ -322,7 +321,7 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
     from datetime import datetime
     from uuid import uuid4
 
-    RUN.reset()  # reset the clock
+    # RUN.reset()  # do not reset the clock
     RUN.mode = mode
 
     ctx = dict(env=SimpleNamespace(**os.environ), now=datetime.now(), uuid=uuid4(), **ext)
