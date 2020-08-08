@@ -1,5 +1,5 @@
 Jaynes, A Utility for training ML models on AWS, GCE, SLURM, with or without docker 
-====================================================================================
+===================================================================================
 
 |Downloads|
 
@@ -148,15 +148,15 @@ now run in python
 ToDos
 -----
 
--  [ ] more documentation
--  [ ] singularity support
--  [ ] GCE support
--  [ ] support using non-s3 code-block repo.
+-  ☐ more documentation
+-  ☐ singularity support
+-  ☐ GCE support
+-  ☐ support using non-s3 code-block repo.
 
 Done
 ~~~~
 
--  [x] get the initial template to work
+-  ☒ get the initial template to work
 
 Installation
 ------------

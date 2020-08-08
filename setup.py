@@ -14,11 +14,14 @@ setup(name="jaynes",
       author="Ge Yang",
       author_email="yangge1987@gmail.com",
       license=None,
-      keywords=["jaynes", "logging", "DEBUG", "debugging", "timer", "timeit", "decorator", "stopwatch", "tic", "toc"],
+      keywords=["jaynes", "logging", "DEBUG", "debugging", "timer",
+                "timeit", "decorator", "stopwatch", "tic", "toc",
+                ],
       classifiers=[
           "Development Status :: 4 - Beta",
           "Intended Audience :: Science/Research",
           "Programming Language :: Python :: 3"
       ],
       packages=["jaynes"],
+      install_requires=["aiofile"]
       )

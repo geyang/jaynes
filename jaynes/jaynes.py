@@ -7,10 +7,17 @@ from textwrap import dedent
 from types import SimpleNamespace
 from typing import Union
 
-from .helpers import cwd_ancestors, omit, hydrate
-from .templates import ec2_terminate, ssh_remote_exec
-from .runners import Docker, Simple
-from .shell import ck, popen
+from jaynes.helpers import cwd_ancestors, omit, hydrate
+from jaynes.templates import ec2_terminate, ssh_remote_exec
+from jaynes.runners import Docker, Simple
+from jaynes.shell import ck, popen
+
+"""
+Launch takes 3 steps:
+1. jaynes.config(). gzip and upload local directories
+    When jaynes server is used, this one just checks 
+2. jaynes.run(). generates the script and launch remotely.
+"""
 
 
 class Jaynes:
@@ -274,10 +281,19 @@ class Jaynes:
                 print(response)
             return response
 
+    def launch_server(self, server, project, user, token):
+        pass
+        # if self.client is None:
+        #     self.client = JaynesClient(server, project, user, token)
+        # else:
+        #     self.client.config(project)
+        # client.launch
+
     # aliases of launch scripts
     local_docker = launch_local_docker
     ssh = launch_ssh
     ec2 = launch_ec2
+    server = launch_server
 
 
 class RUN:
@@ -372,19 +388,19 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
 
     if runner:
         Runner, runner_config = RUN.config['runner']
-        updated = runner_config.copy()
-        updated.update(runner)
-        RUN.config['runner'] = Runner, updated
+        local_copy = runner_config.copy()
+        local_copy.update(runner)
+        RUN.config['runner'] = Runner, local_copy
 
     if launch:
-        updated = RUN.config['launch']
-        updated.update(launch)
-        RUN.config["launch"] = updated
+        local_copy = RUN.config['launch']
+        local_copy.update(launch)
+        RUN.config["launch"] = local_copy
 
     if host:
-        updated = RUN.config['host']
-        updated.update(host)
-        RUN.config["host"] = updated
+        local_copy = RUN.config['host']
+        local_copy.update(host)
+        RUN.config["host"] = local_copy
 
     RUN.config.update(ctx)
     RUN.J.set_mount(*RUN.config.get("mounts"))

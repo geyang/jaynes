@@ -71,7 +71,7 @@ class Slurm(RunnerType):
     post_script = ""
 
     def __init__(self, *, mounts=None, pypath="", setup="", startup=None, launch_directory=None, envs=None,
-                 n_gpu=None, entry_script=f"python -u -m jaynes.entry",
+                 n_gpu=None, entry_script="python -u -m jaynes.entry",
                  partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, args=None, **options):
         launch_directory = launch_directory or os.getcwd()
         # --get-user-env
