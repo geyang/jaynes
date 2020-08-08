@@ -1,6 +1,6 @@
 import requests
 import json
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 
 
 class JaynesClient:
@@ -11,7 +11,10 @@ class JaynesClient:
         if kwargs:
             path += "?" + urlencode(kwargs)
         r = requests.post(self.server + path, data=data)
-        return r.json()
+        try:
+            return r.json()
+        except:
+            return r
 
     def post_json(self, path, data, **kwargs):
         serialized = json.dumps(data)
@@ -23,7 +26,10 @@ class JaynesClient:
         r = requests.put(self.server + path, data=data)
         if r.status_code > 200:
             print(r.text)
-        return r.json()
+        try:
+            return r.json()
+        except:
+            return r
 
     def gzip_local(self, dir, target):
         pass
@@ -34,7 +40,7 @@ class JaynesClient:
             remote_path = file
         with open(file, 'rb') as f:
             text = f.read()
-        r = self.put("/files/" + remote_path, data=text)
+        r = self.put("/files/" + quote(remote_path), data=text)
         return r
 
     def update_file(self, file, remote_path=None, overwrite=True):
@@ -43,34 +49,52 @@ class JaynesClient:
             remote_path = file
         with open(file, 'rb') as f:
             text = f.read()
-        r = self.post("/files/" + remote_path, data=text, overwrite=overwrite)
+        r = self.post("/files/" + quote(remote_path), data=text, overwrite=overwrite)
         return r
 
     def unzip_remote(self, dir):
         pass
 
-    def execute(self, cmd):
-        return self.post_json("/exec", dict(cmd=cmd))
+    def execute(self, cmd, timeout=None):
+        return self.post_json("/exec", dict(cmd=cmd, timeout=timeout))
 
     def map(self, *cmds):
-        return self.post_json("/exec", dict(cmds=cmds))
+        return self.post_json("/exec", dict(cmds=cmds, timeout=None))
 
 
 if __name__ == '__main__':
+    # from .server import run
     # test this
-    # client = JaynesClient()
-    client = JaynesClient(server="http://d96a7f6c0acc.ngrok.io")
-    status, stdout, stderr = client.execute('ls')
-    print(status, stdout, stderr)
-    outs = client.map('ls', "ls", "ls")
-    for status, stdout, stderr in outs:
-        print(status, stdout, stderr)
+    client = JaynesClient()
+    # client = JaynesClient(server="http://mars.ge.ngrok.io")
+    # status, out, err = client.execute("touch 'echo \"yo\"' > .t")
+    # status, out, err = client.execute("touch 'sleep 5' > .t")
+    # status, out, err = client.execute("touch 'echo \"hey\"' >> .t")
+    for i in range(1000):
+        print(i)
+        # status, out, err = client.execute("echo 'yo' & sleep 10 && echo 'done'")
+        r = client.execute(f"SEED={i} python payload.py >> .log", timeout=0.01)
+        print(r)
+        # print(out, err)
+    # status, stdout, stderr = client.execute('ls')
+    # print(status, stdout, stderr)
+    # outs = client.map('ls', "ls", "ls")
+    # for status, stdout, stderr in outs:
+    #     print(status, stdout, stderr)
+    #
+    # client.execute('mkdir -p ".test"')
+    # client.execute('touch ".test/README.md"')
+    # r = client.execute('ls ".test"')
+    # print(r)
+    # client.upload_file("../README.md", "$JYNMNT/.test/README.md")
+    # client.execute('rm ".test"')
+    # client.update_file("../README.md", ".test/README.md")
+    # client.execute('rm ".test"')
+    # run(f"gzip ")
 
-    client.execute('mkdir -p ".test"')
-    client.execute('touch ".test/README.md"')
-    r = client.execute('ls ".test"')
-    print(r)
-    client.upload_file("../README.md", ".test/README.md")
-    client.execute('rm ".test"')
-    client.update_file("../README.md", ".test/README.md")
-    client.execute('rm ".test"')
+# todo:
+#   1. gzip locally
+#   2. watch files locally
+#   3. upload file that has changed
+#   4. copy file to new location
+#   5. launch remotely

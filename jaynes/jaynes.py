@@ -7,17 +7,11 @@ from textwrap import dedent
 from types import SimpleNamespace
 from typing import Union
 
+from jaynes.client import JaynesClient
 from jaynes.helpers import cwd_ancestors, omit, hydrate
 from jaynes.templates import ec2_terminate, ssh_remote_exec
 from jaynes.runners import Docker, Simple
-from jaynes.shell import ck, popen
-
-"""
-Launch takes 3 steps:
-1. jaynes.config(). gzip and upload local directories
-    When jaynes server is used, this one just checks 
-2. jaynes.run(). generates the script and launch remotely.
-"""
+from jaynes.shell import ck
 
 
 class Jaynes:
@@ -33,22 +27,21 @@ class Jaynes:
 
     _uploaded = []
 
-    def upload_mount(self, verbose=None):
+    def upload_mount(self, verbose=None, **host, ):
         for mount in self.mounts:
             if mount in self._uploaded:
                 print('this package is already uploaded')
             else:
                 self._uploaded.append(mount)
-                ck(dedent(mount.local_script or ""), verbose=verbose, shell=True)
+                mount.upload(verbose=verbose, **host)
 
     # def run_local_setup(self, verbose=False):
     #     for m in self.mounts:
     #         self.upload_mount(m)
 
-    host_unpack_script = None
+    host_unpacked = None
 
     def make_host_unpack_script(self, log_dir="/tmp/jaynes-mount", delay=None, verbose=False, dry=False):
-        assert self.host_unpack_script is None, "make sure ran only once"
         # the log_dir is primarily used for the run script. Therefore it should use ued here instead.
         log_path = os.path.join(log_dir, "jaynes-launch.log")
         error_path = os.path.join(log_dir, "jaynes-launch.err.log")
@@ -57,7 +50,7 @@ class Jaynes:
             [m.host_setup for m in self.mounts if hasattr(m, "host_setup") and m.host_setup]
         )
 
-        self.host_unpack_script = dedent(f"""
+        host_unpack_script = dedent(f"""
         #!/bin/bash
         # to allow process substitution
         set +o posix
@@ -69,7 +62,7 @@ class Jaynes:
         }} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
         """).strip()
 
-        return self
+        return host_unpack_script
 
     def launch_local_docker(self, log_dir="/tmp/jaynes-mount", delay=None, verbose=False, dry=False):
         # the log_dir is primarily used for the run script. Therefore it should use ued here instead.
@@ -79,7 +72,7 @@ class Jaynes:
         upload_script = '\n'.join(
             [m.upload_script for m in self.mounts if hasattr(m, "upload_script") and m.upload_script]
         )
-        host_setup = "" if self.host_unpack_script else "\n".join(
+        host_setup = "" if self.host_unpacked else "\n".join(
             [m.host_setup for m in self.mounts if hasattr(m, "host_setup") and m.host_setup]
         )
 
@@ -109,8 +102,9 @@ class Jaynes:
 
     launch_script = None
 
-    def make_host_script(self, log_dir="~/debug-outputs", setup=None, terminate_after=False, delay=None,
-                         instance_tag=None, region=None):
+    def make_host_script(self, log_dir="~/debug-outputs", setup=None, terminate_after=False,
+                         delay=None, instance_tag=None, region=None,
+                         tee=True, **_):
         """
         function to make the host script
 
@@ -129,7 +123,7 @@ class Jaynes:
             [m.upload_script for m in self.mounts if hasattr(m, "upload_script") and m.upload_script]
         )
         # does not unpack if the self.host_unpack_script has already been generated.
-        host_unpack_script = "" if self.host_unpack_script else "\n".join(
+        host_unpack_script = "" if self.host_unpacked else "\n".join(
             [m.host_setup for m in self.mounts if hasattr(m, "host_setup") and m.host_setup]
         )
         if instance_tag:
@@ -150,31 +144,31 @@ class Jaynes:
         """
         # NOTE: path.join is running on local computer, so it might not be quite right if remote is say windows.
         # NOTE: dedent is required by aws EC2.
-        # noinspection PyAttributeOutsideInit
+        if tee:
+            output_piping = f">>(tee -a {log_path}) 2>>(tee -a {error_path} >&2)"
+        else:
+            output_piping = f"1>>{log_path} >> {error_path}"
         self.launch_script = dedent(f"""
-        #!/bin/bash
-        # to allow process substitution
-        set +o posix
-        mkdir -p {log_dir}
-        JAYNES_LOG_DIR={log_dir}
-        {{
-            
-            {setup or ""}
-            {tag_current_instance if instance_tag else ""}
-            
-            {host_unpack_script}
-            
-            # upload_script from within the host.
-            {upload_script}
-
-            # todo: include this inside the runner script.
-            {self.runner.setup_script}
-            {self.runner.run_script}
-            {self.runner.post_script}
-            {ec2_terminate(region, delay) if terminate_after else ""}
-
-        }} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
+#!/bin/bash
+# to allow process substitution
+set +o posix
+mkdir -p {log_dir}
+JAYNES_LOG_DIR={log_dir}
+{{
+{setup or ""}
+{tag_current_instance if instance_tag else ""}
+{host_unpack_script}
+# upload_script from within the host.
+{upload_script}
+# todo: include this inside the runner script.
+{self.runner.setup_script}
+{self.runner.run_script}
+{self.runner.post_script}
+{ec2_terminate(region, delay) if terminate_after else ""}
+}} {output_piping}
         """).strip()
+        # }} > {log_path} 2> {error_path} &
+        # }} > >({tee_string}{log_path}) 2> >({tee_string}{error_path} >&2)
 
         return self
 
@@ -254,8 +248,9 @@ class Jaynes:
         p.stdin.write(bytes(pipe_in, 'utf-8'))
         p.stdin.flush()
 
-    def launch_ec2(self, region, image_id, instance_type, key_name, security_group, spot_price=None,
-                   iam_instance_profile_arn=None, verbose=False, dry=False):
+    def launch_ec2(self, region, image_id, instance_type, key_name, security_group,
+                   spot_price=None, iam_instance_profile_arn=None, verbose=False,
+                   dry=False):
         import boto3
         ec2 = boto3.client("ec2", region_name=region, aws_access_key_id=os.environ.get('AWS_ACCESS_KEY'),
                            aws_secret_access_key=os.environ.get('AWS_ACCESS_SECRET'))
@@ -281,19 +276,42 @@ class Jaynes:
                 print(response)
             return response
 
-    def launch_server(self, server, project, user, token):
-        pass
-        # if self.client is None:
-        #     self.client = JaynesClient(server, project, user, token)
-        # else:
-        #     self.client.config(project)
-        # client.launch
+    def manager_host_setup(self, host, verbose=None, **_):
+        self.host_unpacked = True
+        client = JaynesClient(host)
+        host_setup = [dedent(m.host_setup)
+                      for m in self.mounts if hasattr(m, "host_setup") and m.host_setup]
+        pipe_back = client.map(*host_setup)
+        if verbose:
+            print(*host_setup, sep="--------")
+            print(pipe_back)
+        return pipe_back
+
+    def launch_manager(self, host, log_dir, project=None, user=None, token=None,
+                       sudo=False, cleanup=True, verbose=False, timeout=None, **_):
+
+        tf = tempfile.NamedTemporaryFile(prefix="jaynes_launcher-", suffix=".sh", delete=False)
+        with open(tf.name, 'w') as f:
+            f.write(self.launch_script)
+        tf.file.close()
+
+        client = JaynesClient(host)
+
+        remote_script_name = log_dir + "/jaynes_launcher.sh"
+        client.upload_file(tf.name, remote_script_name)
+
+        if verbose:
+            print(self.launch_script)
+
+        cmd = f"bash {remote_script_name}"
+        r = client.execute(cmd, timeout)
+        print(r)
 
     # aliases of launch scripts
     local_docker = launch_local_docker
     ssh = launch_ssh
     ec2 = launch_ec2
-    server = launch_server
+    manager = launch_manager
 
 
 class RUN:
@@ -404,7 +422,7 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
 
     RUN.config.update(ctx)
     RUN.J.set_mount(*RUN.config.get("mounts"))
-    RUN.J.upload_mount(verbose=RUN.config.get('verbose'))
+    RUN.J.upload_mount(**RUN.config.get('host'), verbose=RUN.config.get('verbose'))
 
 
 def run(fn, *args, __run_config=None, **kwargs, ):
@@ -445,23 +463,28 @@ def run(fn, *args, __run_config=None, **kwargs, ):
 
     launch_config = RUN.config['launch']
 
-    if launch_config['type'].startswith('ssh') and j.host_unpack_script is None:
+    if launch_config['type'].startswith('ssh') and not j.host_unpacked:
 
-        j.make_host_unpack_script(**host_config)
+        j.host_unpacked = j.make_host_unpack_script(**host_config)
         if RUN.config.get('verbose', False):
-            print(j.host_unpack_script)
+            print(j.host_unpacked)
             print('Now Upload Code')
-        j.launch_script = j.host_unpack_script
+        j.launch_script = j.host_unpacked
         j.ssh(**omit(launch_config, 'type', 'block'), block=True)
         j.launch_script = None
 
-    # config.HOST
+    if launch_config['type'] == "manager" and not j.host_unpacked:
+        cprint('unpacking code remotely...', color="green")
+        j.manager_host_setup(**host_config, verbose=RUN.config.get('verbose'))
+
     j.make_host_script(**host_config)
     if RUN.config.get('verbose'):
         print(j.launch_script)
 
     # config.LAUNCH
-    _ = getattr(j, launch_config['type'])(**omit(launch_config, 'type'))
+    kwargs = host_config.copy()
+    kwargs.update(omit(launch_config, 'type'))
+    _ = getattr(j, launch_config['type'])(**kwargs)
     if RUN.config.get('verbose'):
         cprint(f"launched! {_}", "green")
     return _

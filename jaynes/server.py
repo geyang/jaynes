@@ -16,18 +16,36 @@ class ServerConfig(ParamsProto, prefix=""):
     port = 8092
     token = None
     file_root = os.getcwd()
+    envs = {
+        "JYNMNT": os.getcwd() + "/jaynes-mounts"
+    }
 
     @classmethod
     def __init__(cls, deps=None, **kwargs):
         cls.server = f"{cls.protocol}://{cls.host}:{cls.port}"
         cls._update(deps, **kwargs)
 
-        print("""
-        Jaynes Server is now running!
-        """)
+        if cls.envs:
+            os.environ.update(cls.envs)
+
+        print(f"Jaynes Server is now running!")
+        print(cls.envs)
 
 
 app = Sanic("Jaynes Server")
+
+
+def interpolate(path: str, envs, is_path=True):
+    if path is None:
+        return path
+    sorted_envs = list(envs.items())
+    sorted_envs.sort(key=lambda kv: kv[0], reverse=True)
+    for k, v in sorted_envs:
+        path = path.replace("$" + k, v)
+    # remove occasional double slash due to $TMPDIR end in "/"
+    if is_path:
+        return os.path.realpath(path)
+    return path
 
 
 # note: let's build this using an RPC pattern, where
@@ -36,62 +54,79 @@ app = Sanic("Jaynes Server")
 
 @app.route("/files/<path:path>", methods=["PUT"], stream=True)
 async def upload(request, path):
-    print(path)
-    content = ''
+    content = b''
+    path = interpolate(path, os.environ)
     dirname = os.path.dirname(path)
     os.makedirs(dirname, exist_ok=True)
 
-    async with AIOFile(path, 'w+') as afp:
-        while True:
-            body = await request.stream.read()
-            if body is None:
-                break
-            content += body.decode('utf-8')
-            await afp.write(content)
-            await afp.fsync()
-    print(content)
+    print(">>", dirname, path)
+
+    # async with AIOFile(path, 'w+') as afp:
+    while True:
+        body = await request.stream.read()
+        if body is None:
+            break
+        content += body  # .decode('utf-8')
+        # await afp.write(content)
+        # await afp.fsync()
+    with open(path, "wb") as f:
+        f.write(content)
     return json({"status": 1})
 
 
 @app.route("/files/<path:path>", methods=["POST"], stream=True)
-async def upload(request, path):
-    print(path)
+async def update(request, path):
+    path = interpolate(path, os.environ)
     query_args = dict(request.query_args)
     overwrite = query_args.get('overwrite', True)
-    print(overwrite)
-    content = ''
-    async with AIOFile("/tmp/hello.txt", 'w+' if overwrite else 'a') as afp:
-        while True:
-            body = await request.stream.read()
-            if body is None:
-                break
-            content += body.decode('utf-8')
-            await afp.write(content)
-            await afp.fsync()
-    print(content)
+    content = b''
+    dirname = os.path.dirname(path)
+    os.makedirs(dirname, exist_ok=True)
+    # info: currently NFS has a c bug, causing file streaming to fail.
+    # async with AIOFile(path, 'w+' if overwrite else 'a') as afp:
+    while True:
+        body = await request.stream.read()
+        if body is None:
+            break
+        content += body  # .decode('utf-8')
+        # await afp.write(content)
+        # await afp.fsync()
+    with open(path, 'wb' if overwrite else 'ab') as f:
+        f.write(content)
     return json({"status": 1})
 
 
-async def run(cmd):
+async def run(cmd, timeout=None):
     proc = await asyncio.create_subprocess_shell(
         cmd,
         stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE)
+        stderr=asyncio.subprocess.PIPE,
+        env=os.environ.copy()
+    )
 
-    stdout, stderr = await proc.communicate()
-    return proc.returncode, stdout.decode(), stderr.decode()
+    com = proc.communicate()
+    if timeout is not None:
+        com = asyncio.wait_for(com, timeout)
+    try:
+        stdout, stderr = await com
+        return proc.returncode, stdout.decode(), stderr.decode()
+    except asyncio.TimeoutError:
+        return 0, None, f"Timed out after {timeout} secs."
 
 
 @app.route("/exec", methods=["POST"])
 async def execute(request):
     cmd = request.json.get('cmd', None)
+    timeout = request.json.get('timeout', None)
+    # cmd = interpolate(cmd, os.environ)
     if cmd is not None:
-        result = await run(cmd)
+        result = await run(cmd, timeout)
         return json(result)
     cmds = request.json.get('cmds', [])
+    # cmds = [interpolate(c, os.environ) for c in cmds]
     if cmds:
         results = await asyncio.gather(
-            *[run(c) for c in cmds]
+            *[run(c, timeout) for c in cmds]
         )
         return json(results)
     return json([])

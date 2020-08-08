@@ -19,7 +19,7 @@ def c(cmd, *args, verbose=False, **kwargs):
     return subprocess.call(cmd, *args, **kwargs)
 
 
-def ck(cmd, *args, verbose=False, **kwargs):
+def ck(cmd, *args, verbose=False, **kwargs) -> object:
     if verbose:
         if args:
             print(cmd, *args)

@@ -117,6 +117,59 @@ class Slurm(RunnerType):
         self.run_script = self.run_script_thunk.format(encoded_thunk=encoded_thunk)
         return self
 
+class SlurmManager(RunnerType):
+    """launches slurm jobs through Jaynes Client"""
+    setup_script = ""
+    run_script = ""
+    post_script = ""
+
+    def __init__(self, *, mounts=None, pypath="", setup="", startup=None, launch_directory=None, envs=None,
+                 n_gpu=None, entry_script="python -u -m jaynes.entry",
+                 partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, args=None, **options):
+        launch_directory = launch_directory or os.getcwd()
+        # --get-user-env
+        setup_cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running on login-node"\n"""
+        setup_cmd += (setup.strip() + '\n') if setup else ''
+        setup_cmd += f"PYTHONPATH=$PYTHONPATH:{pypath} "
+
+        # some cluster only allows --gres=gpu:[1-]
+        gres = f"--gres=gpu:{n_gpu}" if n_gpu else ""
+        extra_options = " ".join([f"--{k.replace('_', '-')}='{v}'" for k, v in options.items()])
+        if args:
+            extra_options = "".join([f"--{a} " for a in args]) + extra_options
+        if startup:
+            """
+            use bash mode if there is a startup script. This is not supported on some clusters.
+            For example in vector institute's cluster this does not direct outputs to the 
+            stdout.
+            """
+            entry_env = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}}"
+
+            cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker";"""
+            # todo: change this.
+            cmd += (startup.strip() + ";") if startup else ""
+            cmd += f"""{"cd '{}';".format(launch_directory) if launch_directory else ""}"""
+
+            slurm_cmd = f"srun {gres} --partition={partition} --time={time_limit} " \
+                        f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
+                        f"--comment='{comment}' {extra_options} /bin/bash -l -c '{cmd} {entry_env} {entry_script}'"
+        else:
+            """
+            call the python entry script directly, does not work on the FAIR cluster.
+            """
+            entry_env = f"{JAYNES_PARAMS_KEY}={{encoded_thunk}}"
+            slurm_cmd = f"{entry_env} srun {gres} --partition={partition} --time={time_limit} " \
+                        f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
+                        f"--comment='{comment}' {extra_options} {entry_script}"
+
+        self.run_script_thunk = f""" 
+        {setup_cmd} {envs if envs else ""} {slurm_cmd} """
+
+    def run(self, fn, *args, **kwargs):
+        encoded_thunk = serialize(fn, args, kwargs)
+        self.run_script = self.run_script_thunk.format(encoded_thunk=encoded_thunk)
+        return self
+
 
 class Simple(RunnerType):
     """

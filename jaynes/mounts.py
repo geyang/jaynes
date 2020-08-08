@@ -1,11 +1,21 @@
 import os
 from uuid import uuid4
-
+from textwrap import dedent
+from jaynes.shell import ck
 from .helpers import get_temp_dir
 from os.path import join as pathJoin
 
 
-class Simple:
+class Mount:
+    local_script = None
+
+    def upload(self, verbose=None, **host):
+        if self.local_script is None:
+            return
+        ck(dedent(self.local_script or ""), verbose=verbose, shell=True)
+
+
+class Simple(Mount):
     """Mount a directory from the remote host to docker
 
     :param host_path: path on the host
@@ -23,7 +33,7 @@ class Simple:
         self.pypath = pypath
 
 
-class S3Code:
+class S3Code(Mount):
     """
     Tars a local folder, uploads the content to S3, downloads the tar ball on the remote instance and mounts it
     in docker.
@@ -99,7 +109,7 @@ class S3Code:
         self.docker_mount = f"-v '{host_path}':'{docker_abs}'"
 
 
-class S3Output:
+class S3Output(Mount):
     """
     Mounting a remote directory to docker, and upload it's content periodically to s3.
 
@@ -176,7 +186,7 @@ class S3Output:
 
 
 # New
-class SSHCode:
+class SSHCode(Mount):
     """
     Tars a local folder, uploads the content to S3, downloads the tar ball on the remote instance and mounts it
     in docker.
@@ -245,3 +255,68 @@ class SSHCode:
         self.pypath = pypath
         self.container_path = docker_abs
         self.docker_mount = f"-v '{host_path}':'{docker_abs}'"
+
+
+class TarMount(Mount):
+    tar_path = None
+    host_path = None
+
+    def __init__(self, local_path, local_tar=None, remote_tar=None, host_path=None,
+                 container_path=None,
+                 pypath=False, name=None, excludes=None, file_mask=None, compress=True, servers=[]):
+        self.local_path = local_path
+        self.host_path = host_path
+        self.container_path = container_path or host_path
+        self.pypath = pypath
+        self.excludes = excludes
+        self.file_mask = file_mask
+        self.name = name
+        self.compress = compress
+        self.servers = servers
+
+        file_mask = file_mask or "."  # file_mask can Not be None or "".
+        excludes = excludes or "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'"
+
+        if local_tar is None:
+            name = name or uuid4()
+            tar_name = f"{name}.tar"
+            self.temp_dir = get_temp_dir()
+            self.local_tar = pathJoin(self.temp_dir, tar_name)
+        else:
+            tar_name = os.path.basename(local_tar)
+            print(tar_name)
+            self.temp_dir = os.path.dirname(local_tar)
+            self.local_tar = local_tar
+
+        from .jaynes import RUN
+        local_abs = os.path.join(RUN.project_root, local_path)
+
+        self.remote_tar = remote_tar or f"$TMPDIR/{tar_name}"
+
+        self.local_script = f"""
+                type gtar >/dev/null 2>&1 && alias tar=`which gtar`
+                mkdir -p {self.temp_dir}
+                # Do not use absolute path in tar.
+                tar {excludes} -c{"z" if compress else ""}f {local_tar} -C {local_abs} {file_mask}
+                """
+        self.host_setup = f"""
+                mkdir -p {host_path}
+                tar -{"z" if compress else ""}xf {self.remote_tar} -C {host_path}
+                """
+
+    def upload(self, host, user=None, token=None, verbose=None, **_):
+        from jaynes.client import JaynesClient
+        script = dedent(self.local_script)
+        ck(script, verbose=True, shell=True)
+
+        client = JaynesClient(host, token=token)
+        parent_dir = os.path.dirname(self.remote_tar)
+        tar_name = os.path.basename(self.remote_tar)
+
+        client.execute(f"mkdir -p {parent_dir}")
+        client.upload_file(self.local_tar, self.remote_tar)
+
+        _, stdout, _ = client.execute(f"echo {parent_dir}")
+        print(stdout, parent_dir, self.remote_tar, )
+        _, stdout, stderr = client.execute(f"ls {parent_dir}")
+        assert tar_name in stdout, "file upload failed" + stdout
