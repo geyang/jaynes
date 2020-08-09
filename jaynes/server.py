@@ -17,7 +17,7 @@ class ServerConfig(ParamsProto, prefix=""):
     token = None
     file_root = os.getcwd()
     envs = {
-        "JYNMNT": os.getcwd() + "/jaynes-mounts"
+        "JYNMNT": os.environ.get("JYNMNT", os.getcwd() + "/jaynes-mounts")
     }
 
     @classmethod

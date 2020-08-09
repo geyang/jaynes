@@ -7,6 +7,8 @@ from textwrap import dedent
 from types import SimpleNamespace
 from typing import Union
 
+from termcolor import cprint
+
 from jaynes.client import JaynesClient
 from jaynes.helpers import cwd_ancestors, omit, hydrate
 from jaynes.templates import ec2_terminate, ssh_remote_exec
@@ -305,7 +307,10 @@ JAYNES_LOG_DIR={log_dir}
 
         cmd = f"bash {remote_script_name}"
         r = client.execute(cmd, timeout)
-        print(r)
+        if r[1]:
+            print(r[1])
+        if r[2]:
+            cprint(r[2], "red")
 
     # aliases of launch scripts
     local_docker = launch_local_docker
@@ -484,6 +489,7 @@ def run(fn, *args, __run_config=None, **kwargs, ):
     # config.LAUNCH
     kwargs = host_config.copy()
     kwargs.update(omit(launch_config, 'type'))
+
     _ = getattr(j, launch_config['type'])(**kwargs)
     if RUN.config.get('verbose'):
         cprint(f"launched! {_}", "green")

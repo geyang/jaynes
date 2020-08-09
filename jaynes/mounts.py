@@ -284,7 +284,6 @@ class TarMount(Mount):
             self.local_tar = pathJoin(self.temp_dir, tar_name)
         else:
             tar_name = os.path.basename(local_tar)
-            print(tar_name)
             self.temp_dir = os.path.dirname(local_tar)
             self.local_tar = local_tar
 
@@ -307,7 +306,7 @@ class TarMount(Mount):
     def upload(self, host, user=None, token=None, verbose=None, **_):
         from jaynes.client import JaynesClient
         script = dedent(self.local_script)
-        ck(script, verbose=True, shell=True)
+        ck(script, verbose=verbose, shell=True)
 
         client = JaynesClient(host, token=token)
         parent_dir = os.path.dirname(self.remote_tar)
@@ -317,6 +316,7 @@ class TarMount(Mount):
         client.upload_file(self.local_tar, self.remote_tar)
 
         _, stdout, _ = client.execute(f"echo {parent_dir}")
-        print(stdout, parent_dir, self.remote_tar, )
+        if verbose:
+            print(stdout, parent_dir, self.remote_tar, )
         _, stdout, stderr = client.execute(f"ls {parent_dir}")
         assert tar_name in stdout, "file upload failed" + stdout
