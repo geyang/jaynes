@@ -1,7 +1,7 @@
 import base64
 from typing import Any, Dict, Tuple
 
-from cloudpickle import cloudpickle
+import cloudpickle
 
 
 def deserialize(code):
@@ -11,4 +11,4 @@ def deserialize(code):
 
 def serialize(fn, args: Tuple[Any] = None, kwargs: Dict[Any, Any] = None):
     code = cloudpickle.dumps(dict(thunk=fn, args=args, kwargs=kwargs))
-    return base64.b64encode(code).decode("utf-8")
+    return base64.b64encode(code).decode("ascii")

@@ -104,13 +104,17 @@ class Jaynes:
 
     launch_script = None
 
-    def make_host_script(self, log_dir="~/debug-outputs", setup=None, terminate_after=False,
+    def make_host_script(self,
+                         launch_dir="~/jaynes-launch",
+                         pipe_out=None,
+                         setup=None, terminate_after=False,
                          delay=None, instance_tag=None, region=None,
-                         tee=True, **_):
+                         tee=True,
+                         **_):
         """
         function to make the host script
 
-        :param log_dir: 
+        :param launch_dir: 
         :param sudo:
         :param terminate_after:
         :param delay:
@@ -118,8 +122,15 @@ class Jaynes:
         :param region:
         :return:
         """
-        log_path = os.path.join(log_dir, "jaynes-launch.log")
-        error_path = os.path.join(log_dir, "jaynes-launch.err.log")
+        log_setup = dedent(f"""
+        mkdir -p {launch_dir}
+        JAYNES_LAUNCH_DIR={launch_dir}
+        """)
+
+        if not pipe_out:
+            log_path = os.path.join(launch_dir, "jaynes-launch.log")
+            error_path = os.path.join(launch_dir, "jaynes-launch.err.log")
+            pipe_out = pipe_out or f""" > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)"""
 
         upload_script = '\n'.join(
             [m.upload_script for m in self.mounts if hasattr(m, "upload_script") and m.upload_script]
@@ -146,16 +157,11 @@ class Jaynes:
         """
         # NOTE: path.join is running on local computer, so it might not be quite right if remote is say windows.
         # NOTE: dedent is required by aws EC2.
-        if tee:
-            output_piping = f">>(tee -a {log_path}) 2>>(tee -a {error_path} >&2)"
-        else:
-            output_piping = f"1>>{log_path} >> {error_path}"
-        self.launch_script = dedent(f"""
+        self.launch_script = f"""
 #!/bin/bash
 # to allow process substitution
 set +o posix
-mkdir -p {log_dir}
-JAYNES_LOG_DIR={log_dir}
+{log_setup or ''}
 {{
 {setup or ""}
 {tag_current_instance if instance_tag else ""}
@@ -167,8 +173,8 @@ JAYNES_LOG_DIR={log_dir}
 {self.runner.run_script}
 {self.runner.post_script}
 {ec2_terminate(region, delay) if terminate_after else ""}
-}} {output_piping}
-        """).strip()
+}} {pipe_out or ""}
+""".strip()
         # }} > {log_path} 2> {error_path} &
         # }} > >({tee_string}{log_path}) 2> >({tee_string}{error_path} >&2)
 
@@ -283,13 +289,14 @@ JAYNES_LOG_DIR={log_dir}
         client = JaynesClient(host)
         host_setup = [dedent(m.host_setup)
                       for m in self.mounts if hasattr(m, "host_setup") and m.host_setup]
-        pipe_back = client.map(*host_setup)
         if verbose:
             print(*host_setup, sep="--------")
+        pipe_back = client.map(*host_setup)
+        if verbose:
             print(pipe_back)
         return pipe_back
 
-    def launch_manager(self, host, log_dir, project=None, user=None, token=None,
+    def launch_manager(self, host, launch_dir, project=None, user=None, token=None,
                        sudo=False, cleanup=True, verbose=False, timeout=None, **_):
 
         tf = tempfile.NamedTemporaryFile(prefix="jaynes_launcher-", suffix=".sh", delete=False)
@@ -299,7 +306,7 @@ JAYNES_LOG_DIR={log_dir}
 
         client = JaynesClient(host)
 
-        remote_script_name = log_dir + "/jaynes_launcher.sh"
+        remote_script_name = launch_dir + "/jaynes_launcher.sh"
         client.upload_file(tf.name, remote_script_name)
 
         if verbose:
@@ -307,10 +314,11 @@ JAYNES_LOG_DIR={log_dir}
 
         cmd = f"bash {remote_script_name}"
         r = client.execute(cmd, timeout)
+        print(r)
+        if r[0]:
+            print(r[0])
         if r[1]:
-            print(r[1])
-        if r[2]:
-            cprint(r[2], "red")
+            cprint(r[1], "red")
 
     # aliases of launch scripts
     local_docker = launch_local_docker
@@ -369,12 +377,12 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
         if config_path is None:
             for d in cwd_ancestors():
                 try:
-                    config_path, = glob.glob(d + "/jaynes.yml")
+                    config_path, = glob.glob(d + "/.jaynes.yml")
                     break
                 except Exception:
                     pass
         if config_path is None:
-            cprint('No `jaynes.yml` is found. Run `jaynes.init` to create a configuration file.', "red")
+            cprint('No `.jaynes.yml` is found. Run `jaynes.init` to create a configuration file.', "red")
             return
 
         RUN.project_root = os.path.dirname(config_path)
@@ -455,7 +463,10 @@ def run(fn, *args, __run_config=None, **kwargs, ):
         ), **(__run_config or {}))
     # todo: mapping current work directory correction on the remote instance.
 
-    _ = {k: v.format(**context) if type(v) is str else v for k, v in runner_kwargs.items()}
+    try:
+        _ = {k: v.format(**context) if type(v) is str else v for k, v in runner_kwargs.items()}
+    except IndexError:
+        print(f"Double check your mount string, is a mount missing?")
     if 'launch_directory' not in _:
         _['launch_directory'] = os.getcwd()
 

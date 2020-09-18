@@ -109,9 +109,9 @@ async def run(cmd, timeout=None):
         com = asyncio.wait_for(com, timeout)
     try:
         stdout, stderr = await com
-        return proc.returncode, stdout.decode(), stderr.decode()
+        return stdout.decode(), stderr.decode(), proc.returncode,
     except asyncio.TimeoutError:
-        return 0, None, f"Timed out after {timeout} secs."
+        return None, f"Timed out after {timeout} secs.", 0
 
 
 @app.route("/exec", methods=["POST"])
@@ -133,5 +133,14 @@ async def execute(request):
 
 
 if __name__ == "__main__":
-    ServerConfig()
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('--host', dest='host', type=str,
+                        help='host for the server')
+    parser.add_argument('--port', dest='port', type=int,
+                        help='port for the server')
+
+    args = parser.parse_args()
+    ServerConfig(host=args.host, port=args.port)
     app.run(host=ServerConfig.host, port=ServerConfig.port)

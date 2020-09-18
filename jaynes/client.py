@@ -63,7 +63,7 @@ class JaynesClient:
 
 
 if __name__ == '__main__':
-    # from .server import run
+    from .server import run
     # test this
     client = JaynesClient()
     # client = JaynesClient(server="http://mars.ge.ngrok.io")
