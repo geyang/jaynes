@@ -44,7 +44,7 @@ class Slurm(RunnerType):
               export LC_CTYPE=en_US.UTF-8
             # cd {mounts[0].host_path} && pip install -e . -q
             pypath: "{mounts[0].host_path}/rl:{mounts[0].host_path}/imitation:{mounts[0].host_path}/rl_maml_tf"
-            launch_directory: "{mounts[0].host_path}"
+            work_dir: "{mounts[0].host_path}"
             partition: "dev,priority,uninterrupted"
             time_limit: "0:0:20"
             n_cpu: 40
@@ -54,7 +54,7 @@ class Slurm(RunnerType):
     :param pypath: bool, whether this mounting point is included as a part of the python path
     :param setup: setup script, run in the host to setup the environments
     :param startup: startup script, run inside the :code:`srun` session, before your code is boostrapped.
-    :param launch_directory: path to the current work directory for :code:`srun`.
+    :param work_dir: path to the current work directory for :code:`srun`.
     :param envs: string containing the environment variables. Need to be :code:`;` separated, single line.
     :param entry_script: "python -u -m jaynes.entry"
     :param n_gpu:
@@ -70,10 +70,10 @@ class Slurm(RunnerType):
     run_script = ""
     post_script = ""
 
-    def __init__(self, *, mounts=None, pypath="", setup="", startup=None, launch_directory=None, envs=None,
+    def __init__(self, *, mounts=None, pypath="", setup="", startup=None, work_dir=None, envs=None,
                  n_gpu=None, entry_script="python -u -m jaynes.entry",
                  partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, args=None, **options):
-        launch_directory = launch_directory or os.getcwd()
+        work_dir = work_dir or os.getcwd()
         # --get-user-env
         setup_cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running on login-node"\n"""
         setup_cmd += (setup.strip() + '\n') if setup else ''
@@ -95,7 +95,7 @@ class Slurm(RunnerType):
             cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker";"""
             # todo: change this.
             cmd += (startup.strip() + ";") if startup else ""
-            cmd += f"""{"cd '{}';".format(launch_directory) if launch_directory else ""}"""
+            cmd += f"""{"cd '{}';".format(work_dir) if work_dir else ""}"""
 
             slurm_cmd = f"srun {gres} --partition={partition} --time={time_limit} " \
                         f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
@@ -117,16 +117,17 @@ class Slurm(RunnerType):
         self.run_script = self.run_script_thunk.format(encoded_thunk=encoded_thunk)
         return self
 
+
 class SlurmManager(RunnerType):
     """launches slurm jobs through Jaynes Client"""
     setup_script = ""
     run_script = ""
     post_script = ""
 
-    def __init__(self, *, mounts=None, pypath="", setup="", startup=None, launch_directory=None, envs=None,
+    def __init__(self, *, mounts=None, pypath="", setup="", startup=None, work_dir=None, envs=None,
                  n_gpu=None, entry_script="python -u -m jaynes.entry",
                  partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, args=None, **options):
-        launch_directory = launch_directory or os.getcwd()
+        work_dir = work_dir or os.getcwd()
         # --get-user-env
         setup_cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running on login-node"\n"""
         setup_cmd += (setup.strip() + '\n') if setup else ''
@@ -148,7 +149,7 @@ class SlurmManager(RunnerType):
             cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker";"""
             # todo: change this.
             cmd += (startup.strip() + ";") if startup else ""
-            cmd += f"""{"cd '{}';".format(launch_directory) if launch_directory else ""}"""
+            cmd += f"""{"cd '{}';".format(work_dir) if work_dir else ""}"""
 
             slurm_cmd = f"srun {gres} --partition={partition} --time={time_limit} " \
                         f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
@@ -179,7 +180,7 @@ class Simple(RunnerType):
     :param pypath:
     :param startup:
     :param mount:
-    :param launch_directory:
+    :param work_dir:
     :param envs: Set of environment key and variables, a string
     :param entry_script: "python -u -m jaynes.entry"
     :param use_gpu:
@@ -188,16 +189,16 @@ class Simple(RunnerType):
     run_script = ""
     post_script = ""
 
-    def __init__(self, *, mounts=None, pypath="", launch_directory=None, setup=None, startup=None, envs=None,
+    def __init__(self, *, mounts=None, pypath="", work_dir=None, setup=None, startup=None, envs=None,
                  entry_script="python -u -m jaynes.entry",
                  use_gpu=False, verbose=None, **_):
-        launch_directory = launch_directory or os.getcwd()
+        work_dir = work_dir or os.getcwd()
         cmd = ""
         if verbose:
             cmd += f"""printf "\\e[1;34m%-6s\\e[m" "Running on remote host {' (gpu)' if use_gpu else ''}";"""
         cmd += (startup.strip() + ';') if startup else ''
         cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath};"
-        cmd += f"""{"cd '{}';".format(launch_directory) if launch_directory else ""}"""
+        cmd += f"""{"cd '{}';".format(work_dir) if work_dir else ""}"""
         cmd += f"{JAYNES_PARAMS_KEY}={{encoded_thunk}} {entry_script}"
         test_gpu = f"""
                 echo 'Testing nvidia-smi inside docker'
@@ -234,7 +235,7 @@ class Docker(RunnerType):
             startup: yes | pip install jaynes ml-logger -q
             envs: "LANG=utf-8"
             pypath: "{mounts[0].container_path}"
-            launch_directory: "{mounts[0].container_path}"
+            work_dir: "{mounts[0].container_path}"
             ipc: host
             use_gpu: false
 
@@ -244,7 +245,7 @@ class Docker(RunnerType):
     :param mount:
     :param pypath:
     :param work_directory:
-    :param launch_directory:
+    :param work_dir:
     :param envs: Set of environment key and variables, a string
     :param entry_script: "python -u -m jaynes.entry"
     :param name: Name of the docker container instance, use uuid if is None
@@ -257,7 +258,7 @@ class Docker(RunnerType):
     run_script = ""
     post_script = ""
 
-    def __init__(self, *, image, mounts=None, work_directory=None, launch_directory=None, startup=None,
+    def __init__(self, *, image, mounts=None, work_directory=None, work_dir=None, startup=None,
                  pypath=None, envs=None, entry_script="python -u -m jaynes.entry", name=None, use_gpu=False, ipc=None,
                  tty=False, **_):
         mount_string = " ".join([m.docker_mount for m in mounts])
@@ -270,7 +271,7 @@ class Docker(RunnerType):
         cmd = f"""echo "Running in docker{' (gpu)' if use_gpu else ''}";"""
         cmd += f"{startup.strip()};" if startup else ''
         cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath};" if pypath else ""
-        cmd += f"cd '{launch_directory}';" if launch_directory else ""
+        cmd += f"cd '{work_dir}';" if work_dir else ""
         # cmd += f"pwd;"
         cmd += f"""{JAYNES_PARAMS_KEY}={{encoded_thunk}} {entry_script}"""
         docker_container_name = name or uuid4()

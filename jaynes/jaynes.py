@@ -43,10 +43,10 @@ class Jaynes:
 
     host_unpacked = None
 
-    def make_host_unpack_script(self, log_dir="/tmp/jaynes-mount", delay=None, verbose=False, dry=False):
+    def make_host_unpack_script(self, launch_dir="/tmp/jaynes-mount", delay=None, **_):
         # the log_dir is primarily used for the run script. Therefore it should use ued here instead.
-        log_path = os.path.join(log_dir, "jaynes-launch.log")
-        error_path = os.path.join(log_dir, "jaynes-launch.err.log")
+        log_path = os.path.join(launch_dir, "jaynes-launch.log")
+        error_path = os.path.join(launch_dir, "jaynes-launch.err.log")
 
         host_setup = "\n".join(
             [m.host_setup for m in self.mounts if hasattr(m, "host_setup") and m.host_setup]
@@ -56,7 +56,7 @@ class Jaynes:
         #!/bin/bash
         # to allow process substitution
         set +o posix
-        mkdir -p {log_dir}
+        mkdir -p {launch_dir}
         {{
             # host_setup
             {host_setup}
@@ -181,7 +181,7 @@ set +o posix
         return self
 
     def launch_ssh(self, ip, port=None, username="ubuntu", pem=None, profile=None,
-                   password=None, sudo=False, cleanup=True, block=False, console_mode=False, dry=False, verbose=False):
+                   password=None, sudo=False, cleanup=True, block=False, console_mode=False, dry=False, verbose=False, **_):
         """
         run launch_script remotely by ip_address. First saves the run script locally as a file, then use
         scp to transfer the script to remote instance then run.
@@ -258,7 +258,7 @@ set +o posix
 
     def launch_ec2(self, region, image_id, instance_type, key_name, security_group,
                    spot_price=None, iam_instance_profile_arn=None, verbose=False,
-                   dry=False):
+                   dry=False, **_):
         import boto3
         ec2 = boto3.client("ec2", region_name=region, aws_access_key_id=os.environ.get('AWS_ACCESS_KEY'),
                            aws_secret_access_key=os.environ.get('AWS_ACCESS_SECRET'))
@@ -296,7 +296,7 @@ set +o posix
             print(pipe_back)
         return pipe_back
 
-    def launch_manager(self, host, launch_dir, project=None, user=None, token=None,
+    def launch_manager(self, host, launch_dir, script_name="jaynes_launch.sh", project=None, user=None, token=None,
                        sudo=False, cleanup=True, verbose=False, timeout=None, **_):
 
         tf = tempfile.NamedTemporaryFile(prefix="jaynes_launcher-", suffix=".sh", delete=False)
@@ -306,7 +306,7 @@ set +o posix
 
         client = JaynesClient(host)
 
-        remote_script_name = launch_dir + "/jaynes_launcher.sh"
+        remote_script_name = launch_dir + "/" + script_name
         client.upload_file(tf.name, remote_script_name)
 
         if verbose:
@@ -314,11 +314,13 @@ set +o posix
 
         cmd = f"bash {remote_script_name}"
         r = client.execute(cmd, timeout)
-        print(r)
-        if r[0]:
-            print(r[0])
-        if r[1]:
-            cprint(r[1], "red")
+        if not len(r):
+            print(r)
+        else:
+            if r[0]:
+                print(r[0])
+            if r[1]:
+                cprint(r[1], "red")
 
     # aliases of launch scripts
     local_docker = launch_local_docker
@@ -328,6 +330,7 @@ set +o posix
 
 
 class RUN:
+    count = 0
     project_root = None
     raw = None
     J: Jaynes = None
@@ -343,6 +346,11 @@ class RUN:
         if cls.__now is None:
             cls.__now = datetime.now()
         return cls.__now.strftime(fmt)
+
+    @classmethod
+    def NOW(cls, fmt):
+        from datetime import datetime
+        return datetime.now().strftime(fmt)
 
     @classmethod
     def reset(cls):
@@ -412,7 +420,9 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
         return
 
     elif not mode:
-        RUN.config.update(RUN.raw.get('run', {}))
+        run = RUN.raw.get('run')
+        assert run, "`run` field in .jaynes.yml can not be empty when using default config"
+        RUN.config.update(run)
     else:
         modes = RUN.raw.get('modes', {})
         RUN.config.update(modes[mode])
@@ -434,8 +444,8 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
         RUN.config["host"] = local_copy
 
     RUN.config.update(ctx)
-    RUN.J.set_mount(*RUN.config.get("mounts"))
-    RUN.J.upload_mount(**RUN.config.get('host'), verbose=RUN.config.get('verbose'))
+    RUN.J.set_mount(*RUN.config.get("mounts", []))
+    RUN.J.upload_mount(**RUN.config.get('host', {}), verbose=RUN.config.get('verbose', None))
 
 
 def run(fn, *args, __run_config=None, **kwargs, ):
@@ -454,6 +464,7 @@ def run(fn, *args, __run_config=None, **kwargs, ):
     # interpolation context
     context = RUN.config.copy()
     context['run'] = SimpleNamespace(
+        count=RUN.count,
         cwd=os.getcwd(),
         now=datetime.now(),
         uuid=uuid4(),
@@ -461,14 +472,15 @@ def run(fn, *args, __run_config=None, **kwargs, ):
             host=":".join([m.host_path for m in RUN.config['mounts'] if m.pypath]),
             container=":".join([m.container_path for m in RUN.config['mounts'] if m.pypath])
         ), **(__run_config or {}))
+    RUN.count += 1
     # todo: mapping current work directory correction on the remote instance.
 
     try:
         _ = {k: v.format(**context) if type(v) is str else v for k, v in runner_kwargs.items()}
     except IndexError:
         print(f"Double check your mount string, is a mount missing?")
-    if 'launch_directory' not in _:
-        _['launch_directory'] = os.getcwd()
+    if 'work_dir' not in _:
+        _['work_dir'] = os.getcwd()
 
     j = RUN.J
     j.set_runner(Runner(**_, mounts=RUN.config.get('mounts', []), ))
@@ -477,7 +489,8 @@ def run(fn, *args, __run_config=None, **kwargs, ):
     # config.HOST
     host_config = RUN.config.get('host', {})
 
-    launch_config = RUN.config['launch']
+    launch_config = {k: v.format(**context) if isinstance(v, str) else v
+                     for k, v in  RUN.config['launch'].items()}
 
     if launch_config['type'].startswith('ssh') and not j.host_unpacked:
 
@@ -512,7 +525,7 @@ def listen(timeout=None):
     import math, time
     from termcolor import cprint
 
-    cprint('Jaynes pipe-back is now listening...', "green")
+    cprint('Jaynes pipe-back is now listening...', "blue")
 
     if timeout:
         time.sleep(timeout)
@@ -520,4 +533,4 @@ def listen(timeout=None):
     else:
         while True:
             time.sleep(math.pi * 20)
-            cprint('Listening to pipe back...', 'green')
+            cprint('Listening to pipe back...', 'blue')

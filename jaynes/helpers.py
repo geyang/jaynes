@@ -64,8 +64,15 @@ def n_to_m(yaml_node):
 # note: now we properly handle the node types.
 def hydrate(Constructor, ctx):
     def _fn(_, node):
-        kwargs = {k: v.format(**ctx) if isinstance(v, str) else v for k, v
-                  in _.construct_mapping(node).items()}
+        kwargs = {}
+        for k, v in _.construct_mapping(node).items():
+            if isinstance(v, str):
+                try:
+                    kwargs[k] = v.format(**ctx)
+                except AttributeError as e:
+                    raise Exception(f"during comprehension of <{k}: {v}>: {str(e)}")
+            else:
+                kwargs[k] = v
         return Constructor(**kwargs)
 
     return _fn
