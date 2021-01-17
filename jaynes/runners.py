@@ -5,6 +5,13 @@ from .constants import JAYNES_PARAMS_KEY
 from .param_codec import serialize
 
 
+def inline(script: str) -> str:
+    script = script.strip()
+    if not script:
+        return ""
+    return script if script.endswith(';') else f'{script};'
+
+
 class RunnerType:
     @classmethod
     def from_yaml(cls, _, node):
@@ -84,6 +91,7 @@ class Slurm(RunnerType):
         extra_options = " ".join([f"--{k.replace('_', '-')}='{v}'" for k, v in options.items()])
         if args:
             extra_options = "".join([f"--{a} " for a in args]) + extra_options
+
         if startup:
             """
             use bash mode if there is a startup script. This is not supported on some clusters.
@@ -94,7 +102,7 @@ class Slurm(RunnerType):
 
             cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker";"""
             # todo: change this.
-            cmd += (startup.strip() + ";") if startup else ""
+            cmd += inline(startup)
             cmd += f"""{"cd '{}';".format(work_dir) if work_dir else ""}"""
 
             slurm_cmd = f"srun {gres} --partition={partition} --time={time_limit} " \
@@ -148,7 +156,7 @@ class SlurmManager(RunnerType):
 
             cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker";"""
             # todo: change this.
-            cmd += (startup.strip() + ";") if startup else ""
+            cmd += inline(startup) if startup else ""
             cmd += f"""{"cd '{}';".format(work_dir) if work_dir else ""}"""
 
             slurm_cmd = f"srun {gres} --partition={partition} --time={time_limit} " \
@@ -196,7 +204,7 @@ class Simple(RunnerType):
         cmd = ""
         if verbose:
             cmd += f"""printf "\\e[1;34m%-6s\\e[m" "Running on remote host {' (gpu)' if use_gpu else ''}";"""
-        cmd += (startup.strip() + ';') if startup else ''
+        cmd += inline(startup) if startup else ''
         cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath};"
         cmd += f"""{"cd '{}';".format(work_dir) if work_dir else ""}"""
         cmd += f"{JAYNES_PARAMS_KEY}={{encoded_thunk}} {entry_script}"
@@ -269,7 +277,7 @@ class Docker(RunnerType):
         self.docker_image = image
         docker_cmd = "nvidia-docker" if use_gpu else "docker"
         cmd = f"""echo "Running in docker{' (gpu)' if use_gpu else ''}";"""
-        cmd += f"{startup.strip()};" if startup else ''
+        cmd += inline(startup) if startup else ''
         cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath};" if pypath else ""
         cmd += f"cd '{work_dir}';" if work_dir else ""
         # cmd += f"pwd;"
