@@ -89,19 +89,19 @@ class Slurm(RunnerType):
 
         # some cluster only allows --gres=gpu:[1-]
         option_str = ""
-        if partition:
+        if partition is not None:
             option_str += f" --partition={partition}"
-        if time_limit:
+        if time_limit is not None:
             option_str += f" --time={time_limit}"
         if n_cpu is not None:
-            option_str += f" --cpus-per-task {n_cpu}"
+            option_str += f" --cpus-per-task={n_cpu}"
         if n_gpu:
-            option_str = f" --gres=gpu:{n_gpu}"
-        if name:
+            option_str += f" --gres=gpu:{n_gpu}"
+        if name is not None:
             option_str += f" --job-name='{name}'"
         if label:
             option_str += f" --label"
-        if comment:
+        if comment is not None:
             option_str += f" --comment='{comment}'"
 
         extra_options = " ".join([f"--{k.replace('_', '-')}='{v}'" for k, v in options.items()])
