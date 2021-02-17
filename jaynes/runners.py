@@ -1,4 +1,5 @@
 import os
+from textwrap import indent
 from uuid import uuid4
 
 from .constants import JAYNES_PARAMS_KEY
@@ -277,42 +278,41 @@ class Docker(RunnerType):
     run_script = ""
     post_script = ""
 
-    def __init__(self, *, image, mounts=None, work_directory=None, work_dir=None, startup=None,
+    def __init__(self, *, image, mounts=None, work_directory=None, work_dir=None, setup="", startup=None,
                  pypath=None, envs=None, entry_script="python -u -m jaynes.entry", name=None, use_gpu=False, ipc=None,
                  tty=False, **_):
         mount_string = " ".join([m.docker_mount for m in mounts])
-        self.setup_script = f"""
-            # sudo service docker start # this is optional.
-            # docker pull {image}
-        """
+        self.setup_script = setup
         self.docker_image = image
         docker_cmd = "nvidia-docker" if use_gpu else "docker"
         cmd = f"""echo "Running in docker{' (gpu)' if use_gpu else ''}";"""
         cmd += inline(startup) if startup else ''
         cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath};" if pypath else ""
         cmd += f"cd '{work_dir}';" if work_dir else ""
-        # cmd += f"pwd;"
         cmd += f"""{JAYNES_PARAMS_KEY}={{encoded_thunk}} {entry_script}"""
         docker_container_name = name or uuid4()
         test_gpu = f"""
                 echo 'Testing nvidia-smi inside docker'
                 {envs if envs else ""} {docker_cmd} run --rm {image} nvidia-smi
                 """
+
         remove_by_name = f"""
-                echo 'kill running instances'
-                {docker_cmd} kill {docker_container_name}
-                echo 'remove existing container with name'
-                {envs if envs else ""} {docker_cmd} rm {docker_container_name}""" if docker_container_name else ""
+            echo -ne 'kill running instances '
+            {docker_cmd} kill {docker_container_name}
+            echo -ne 'remove existing container '
+            {envs if envs else ""} {docker_cmd} rm {docker_container_name}""" if docker_container_name else ""
+
         ipc_config = f"--ipc={ipc}" if ipc else ""
         wd_config = f"-w={work_directory}" if work_directory else ""
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""
-                {test_gpu if use_gpu else ""}
-                {remove_by_name}
-                echo 'Now run docker'
-                {envs if envs else ""} {docker_cmd} run -i{"t" if tty else ""} {wd_config} {ipc_config} {mount_string} --name '{docker_container_name}' \\
-                {image} /bin/bash -c '{cmd}'
-                """
+            {indent(self.setup_script, " " * 12).strip()}
+            {remove_by_name if name else ""}
+            {test_gpu if use_gpu else ""}
+            echo 'Now run docker'
+            {envs if envs else ""} {docker_cmd} run -i{"t" if tty else ""} {wd_config} {ipc_config} {mount_string} --name '{docker_container_name}' \\
+            {image} /bin/bash -c '{cmd}'
+            """
 
     def run(self, fn, *args, **kwargs):
         encoded_thunk = serialize(fn, args, kwargs)
