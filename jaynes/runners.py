@@ -273,6 +273,8 @@ class Docker(RunnerType):
     :param ipc: specify ipc for multiprocessing. Typically 'host'
     :param tty: almost never used. This is because when this script is ran, it is almost garanteed that the
                 ssh/bash session is not going to be tty.
+    :param **kwargs: passed in as parameters to docker command.
+                memor="4g" gets translated into `--memory 4g`
     """
     setup_script = ""
     run_script = ""
@@ -280,7 +282,7 @@ class Docker(RunnerType):
 
     def __init__(self, *, image, mounts=None, work_directory=None, work_dir=None, setup="", startup=None,
                  pypath=None, envs=None, entry_script="python -u -m jaynes.entry", name=None, use_gpu=False, ipc=None,
-                 tty=False, **_):
+                 tty=False, **kwargs):
         mount_string = " ".join([m.docker_mount for m in mounts])
         self.setup_script = setup
         self.docker_image = image
@@ -304,13 +306,16 @@ class Docker(RunnerType):
 
         ipc_config = f"--ipc={ipc}" if ipc else ""
         wd_config = f"-w={work_directory}" if work_directory else ""
+        rest_config = ""
+        for k, v in kwargs.items():
+            rest_config += f"--{k.replace('_', '-')}={v}"
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""
             {indent(self.setup_script, " " * 12).strip()}
             {remove_by_name if name else ""}
             {test_gpu if use_gpu else ""}
             echo 'Now run docker'
-            {envs if envs else ""} {docker_cmd} run -i{"t" if tty else ""} {wd_config} {ipc_config} {mount_string} --name '{docker_container_name}' \\
+            {envs if envs else ""} {docker_cmd} run -i{"t" if tty else ""} {wd_config} {ipc_config} {rest_config} {mount_string} --name '{docker_container_name}' \\
             {image} /bin/bash -c '{cmd}'
             """
 
