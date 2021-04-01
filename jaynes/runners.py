@@ -79,8 +79,8 @@ class Slurm(RunnerType):
     post_script = ""
 
     def __init__(self, *, mounts=None, pypath="", setup="", startup=None, work_dir=None, envs=None,
-                 n_gpu=None, entry_script="python -u -m jaynes.entry",
-                 partition=None, time_limit: str = None, n_cpu=4, name="", comment="", label=False, args=None,
+                 n_gpu=None, shell="/bin/bash", entry_script="python -u -m jaynes.entry",
+                 partition=None, time_limit: str = None, n_cpu=4, name=None, comment=None, label=False, args=None,
                  **options):
         work_dir = work_dir or os.getcwd()
         # --get-user-env
@@ -98,14 +98,14 @@ class Slurm(RunnerType):
             option_str += f" --cpus-per-task={n_cpu}"
         if n_gpu:
             option_str += f" --gres=gpu:{n_gpu}"
-        if name is not None:
-            option_str += f" --job-name='{name}'"
+        if name:
+            option_str += f' --job-name="{name}"'
         if label:
             option_str += f" --label"
-        if comment is not None:
-            option_str += f" --comment='{comment}'"
+        if comment:
+            option_str += f' --comment="{comment}"'
 
-        extra_options = " ".join([f"--{k.replace('_', '-')}='{v}'" for k, v in options.items()])
+        extra_options = " ".join([f'--{k.replace("_", "-")}="{v}"' for k, v in options.items()])
         if args:
             extra_options = "".join([f"--{a} " for a in args]) + extra_options
 
@@ -117,12 +117,10 @@ class Slurm(RunnerType):
             For example in vector institute's cluster this does not direct outputs to the 
             stdout.
             """
-
             cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker `hostname`";"""
             cmd += inline(startup)
-            cmd += f"""{"cd '{}';".format(work_dir) if work_dir else ""}"""
-
-            slurm_cmd = f"srun {option_str} {extra_options} /bin/bash -l -c '{cmd} {entry_env} {entry_script}'"
+            cmd += f"""{'cd {};'.format(work_dir) if work_dir else ''}"""
+            slurm_cmd = f"srun {option_str} {extra_options} {shell} -c '{cmd} {entry_env} {entry_script}'"
         else:
             """
             call the python entry script directly, does not work on the FAIR cluster.
@@ -210,25 +208,56 @@ class Simple(RunnerType):
     post_script = ""
 
     def __init__(self, *, mounts=None, pypath="", work_dir=None, setup=None, startup=None, envs=None,
-                 entry_script="python -u -m jaynes.entry",
-                 use_gpu=False, verbose=None, **_):
+                 shell="/bin/bash", entry_script="python -u -m jaynes.entry", pipe="",
+                 cleanup="", detach=False, use_gpu=False, verbose=None, **_):
+        """
+
+        :param mounts:
+        :param pypath:
+        :param work_dir:
+        :param setup:
+        :param startup:
+        :param envs:
+        :param shell:
+        :param entry_script:
+        :param pipe:
+        :param cleanup:
+        :param detach: keep the process running after ssh detachment.
+        :param use_gpu:
+        :param verbose:
+        :param _:
+        """
         work_dir = work_dir or os.getcwd()
         cmd = ""
         if verbose:
             cmd += f"""printf "\\e[1;34m%-6s\\e[m" "Running on remote host {' (gpu)' if use_gpu else ''}";"""
         cmd += inline(startup) if startup else ''
         cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath};"
-        cmd += f"""{"cd '{}';".format(work_dir) if work_dir else ""}"""
+        cmd += f"""{"cd {};".format(work_dir) if work_dir else ""}"""
         cmd += f"{JAYNES_PARAMS_KEY}={{encoded_thunk}} {entry_script}"
+
         test_gpu = f"""
                 echo 'Testing nvidia-smi inside docker'
                 {envs if envs else ""} nvidia-smi
                 """
-        # note: always connect the docker to stdin and stdout.
+        if detach:
+            setup = """
+                export pipe=`mktemp -u`
+                mkfifo $pipe
+                """ + setup
+            cleanup = """
+            cat $pipe
+            rm -f $pipe
+            """ + cleanup
+            # -p ignores NONPIPEs, s.t. screen keeps running after parent process exits
+            pipe = " |& tee -p $pipe" + pipe
+            shell = "screen -md " + shell
+
         self.run_script_thunk = f"""
                 {setup or ""}
                 {test_gpu if use_gpu else ""}
-                {envs if envs else ""} /bin/bash -c '{cmd}'
+                {envs if envs else ""} {shell} -c '{cmd}{pipe}'
+                {cleanup}
                 """
 
     def run(self, fn, *args, **kwargs):

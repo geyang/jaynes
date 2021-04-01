@@ -4,6 +4,7 @@ from textwrap import dedent
 from uuid import uuid4
 
 from jaynes.shell import ck
+
 from .helpers import get_temp_dir
 
 
@@ -13,7 +14,7 @@ class Mount:
     def upload(self, verbose=None, **_):
         if self.local_script is None:
             return
-        ck(dedent(self.local_script or ""), verbose=verbose, shell=True)
+        assert not ck(dedent(self.local_script or ""), verbose=verbose, shell=True)
 
 
 class Simple(Mount):
@@ -254,19 +255,21 @@ class SSHCode(Mount):
         _port = "" if port is None else f"-p {port}"
         _pem = "" if pem is None else f"-i {pem}"
 
-        ssh_string = f"'ssh {_port} {_pem}'" if _port or _pem else 'ssh'
-        rsync_script = f"rsync -az -e {ssh_string} {self.local_tar} {username}@{ip}:{self.remote_tar}"
+        ssh_string = f"ssh {_port} {_pem}" if _port or _pem else 'ssh'
+        mkdir_script = f"{ssh_string} {username}@{ip} mkdir -p {os.path.dirname(self.remote_tar)}"
+        rsync_script = f"rsync -az -e '{ssh_string}' {self.local_tar} {username}@{ip}:{self.remote_tar}"
         if password is not None:  # note: now supports password log in!
             # rsync_script = f'expect <<EOF\nspawn {rsync_script};expect \"password:\";send \"{password}\\r\"\nEOF'
             # need to install sshpass from:
             # https://gist.github.com/arunoda/7790979
+            mkdir_script = f"sshpass -p '{password}' {mkdir_script}"
             rsync_script = f"sshpass -p '{password}' {rsync_script}"
 
         # # scp does not allow file rename.
         # remote_tar_dir = os.path.dirname(remote_tar)
         # scp_script = f"scp {port_.upper()} {pem} {self.local_tar} {username}@{ip}:{remote_tar_dir}"
 
-        self.local_script = dedent(self.tar_script) + rsync_script + "\n"
+        self.local_script = dedent(self.tar_script) + mkdir_script + "\n" + rsync_script + "\n"
 
         return super().upload(verbose=verbose)
 

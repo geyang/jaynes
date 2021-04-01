@@ -7,13 +7,12 @@ from textwrap import dedent
 from types import SimpleNamespace
 from typing import Union
 
-from termcolor import cprint
-
 from jaynes.client import JaynesClient
 from jaynes.helpers import cwd_ancestors, omit, hydrate
-from jaynes.templates import ec2_terminate, ssh_remote_exec
 from jaynes.runners import Docker, Simple
 from jaynes.shell import ck
+from jaynes.templates import ec2_terminate, ssh_remote_exec
+from termcolor import cprint
 
 
 class Jaynes:
@@ -181,7 +180,8 @@ set +o posix
         return self
 
     def launch_ssh(self, ip, port=None, username="ubuntu", pem=None, profile=None,
-                   password=None, sudo=False, cleanup=True, block=False, console_mode=False, dry=False, verbose=False, **_):
+                   password=None, sudo=False, cleanup=True, block=False, console_mode=False, dry=False,
+                   verbose=False, **_):
         """
         run launch_script remotely by ip_address. First saves the run script locally as a file, then use
         scp to transfer the script to remote instance then run.
@@ -202,6 +202,7 @@ set +o posix
         :param verbose:
         :return:
         """
+        # todo: is this still used?
         tf = tempfile.NamedTemporaryFile(prefix="jaynes_launcher-", suffix=".sh", delete=False)
         with open(tf.name, 'w') as f:
             _ = os.path.basename(tf.name)  # fixit: does kill require sudo?
@@ -240,6 +241,10 @@ set +o posix
         pipe_in = "" if profile is None else f"{password}\n"
         if not prelaunch_upload_script:
             pipe_in = pipe_in + self.launch_script + "\n"
+
+        if verbose:
+            print('ssh pipe-in: ')
+            print(pipe_in)
 
         import subprocess
         if block:
@@ -475,10 +480,17 @@ def run(fn, *args, __run_config=None, **kwargs, ):
     RUN.count += 1
     # todo: mapping current work directory correction on the remote instance.
 
-    try:
-        _ = {k: v.format(**context) if type(v) is str else v for k, v in runner_kwargs.items()}
-    except IndexError:
-        print(f"Double check your mount string, is a mount missing?")
+    _ = {}
+    for k, v in runner_kwargs.items():
+        if type(v) is str:
+            try:
+                _[k] = v.format(**context)
+            except IndexError as e:
+                a = '\n'
+                print(f"{k} '{v}' context: {list(context.items())}")
+                raise e
+        else:
+            _[k] = v  # _ = {k: v.format(**context) if type(v) is str else v for k, v in runner_kwargs.items()}
     if 'work_dir' not in _:
         _['work_dir'] = os.getcwd()
 
@@ -490,16 +502,15 @@ def run(fn, *args, __run_config=None, **kwargs, ):
     host_config = RUN.config.get('host', {})
 
     launch_config = {k: v.format(**context) if isinstance(v, str) else v
-                     for k, v in  RUN.config['launch'].items()}
+                     for k, v in RUN.config['launch'].items()}
 
     if launch_config['type'].startswith('ssh') and not j.host_unpacked:
 
         j.host_unpacked = j.make_host_unpack_script(**host_config)
         if RUN.config.get('verbose', False):
-            print(j.host_unpacked)
-            print('Now Upload Code')
+            print('Unpacking On Remote')
         j.launch_script = j.host_unpacked
-        j.ssh(**omit(launch_config, 'type', 'block'), block=True)
+        j.ssh(**omit(launch_config, 'type', 'block'), block=True, verbose=RUN.config.get('verbose', False))
         j.launch_script = None
 
     if launch_config['type'] == "manager" and not j.host_unpacked:
@@ -513,6 +524,7 @@ def run(fn, *args, __run_config=None, **kwargs, ):
     # config.LAUNCH
     kwargs = host_config.copy()
     kwargs.update(omit(launch_config, 'type'))
+    kwargs['verbose'] = RUN.config.get('verbose')
 
     _ = getattr(j, launch_config['type'])(**kwargs)
     if RUN.config.get('verbose'):
