@@ -299,23 +299,26 @@ class Docker(RunnerType):
     :param entry_script: "python -u -m jaynes.entry"
     :param name: Name of the docker container instance, use uuid if is None
     :param use_gpu:
+    :param sudo: Flag, useful for when running on EC2
     :param ipc: specify ipc for multiprocessing. Typically 'host'
     :param tty: almost never used. This is because when this script is ran, it is almost garanteed that the
                 ssh/bash session is not going to be tty.
     :param **kwargs: passed in as parameters to docker command.
-                memor="4g" gets translated into `--memory 4g`
+                memory="4g" gets translated into `--memory 4g`
     """
     setup_script = ""
     run_script = ""
     post_script = ""
 
     def __init__(self, *, image, mounts=None, work_directory=None, work_dir=None, setup="", startup=None,
-                 pypath=None, envs=None, entry_script="python -u -m jaynes.entry", name=None, use_gpu=False, ipc=None,
-                 tty=False, **kwargs):
+                 pypath=None, envs=None, entry_script="python -u -m jaynes.entry", name=None, use_gpu=False,
+                 sudo=False, ipc=None, tty=False, options=None, **_):
         mount_string = " ".join([m.docker_mount for m in mounts])
         self.setup_script = setup
         self.docker_image = image
         docker_cmd = "nvidia-docker" if use_gpu else "docker"
+        if sudo:
+            docker_cmd = "sudo " + docker_cmd
         cmd = f"""echo "Running in docker{' (gpu)' if use_gpu else ''}";"""
         cmd += inline(startup) if startup else ''
         cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath};" if pypath else ""
@@ -336,7 +339,8 @@ class Docker(RunnerType):
         ipc_config = f"--ipc={ipc}" if ipc else ""
         wd_config = f"-w={work_directory}" if work_directory else ""
         rest_config = ""
-        for k, v in kwargs.items():
+        options = options or {}
+        for k, v in options.items():
             rest_config += f"--{k.replace('_', '-')}={v}"
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""

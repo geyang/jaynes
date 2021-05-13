@@ -76,3 +76,7 @@ def hydrate(Constructor, ctx):
         return Constructor(**kwargs)
 
     return _fn
+
+
+def snake2camel(word):
+    return ''.join(x.capitalize() or '_' for x in word.split('_'))

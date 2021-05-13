@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from typing import Union
 
 from jaynes.client import JaynesClient
-from jaynes.helpers import cwd_ancestors, omit, hydrate
+from jaynes.helpers import cwd_ancestors, omit, hydrate, snake2camel
 from jaynes.runners import Docker, Simple
 from jaynes.shell import ck
 from jaynes.templates import ec2_terminate, ssh_remote_exec
@@ -165,11 +165,13 @@ set +o posix
 {setup or ""}
 {tag_current_instance if instance_tag else ""}
 {host_unpack_script}
-# upload_script from within the host.
+            # upload_script from within the host.
 {upload_script}
-# todo: include this inside the runner script.
+            # setup script
 {self.runner.setup_script}
+            # run script
 {self.runner.run_script}
+            # post script
 {self.runner.post_script}
 {ec2_terminate(region, delay) if terminate_after else ""}
 }} {pipe_out or ""}
@@ -263,31 +265,44 @@ set +o posix
 
     def launch_ec2(self, region, image_id, instance_type, key_name, security_group,
                    spot_price=None, iam_instance_profile_arn=None, verbose=False,
-                   dry=False, **_):
+                   dry=False, name=None, tags={}, **_):
         import boto3
-        ec2 = boto3.client("ec2", region_name=region, aws_access_key_id=os.environ.get('AWS_ACCESS_KEY'),
-                           aws_secret_access_key=os.environ.get('AWS_ACCESS_SECRET'))
+        if verbose:
+            print('Using the default AWS Profile')
+        ec2 = boto3.client("ec2", region_name=region)
 
         instance_config = dict(ImageId=image_id, KeyName=key_name, InstanceType=instance_type,
                                SecurityGroups=(security_group,),
                                IamInstanceProfile=dict(Arn=iam_instance_profile_arn))
+
+        tags = {snake2camel(k): v for k, v in tags.items()}
+        if name:
+            tags["Name"] = name
+        tag_str = [dict(Key=k, Value=v) for k, v in tags.items()]
+
         if spot_price:
             # for detailed settings see:
             #     http://boto3.readthedocs.io/en/latest/reference/services/ec2.html#EC2.Client.request_spot_instances
             # issue here: https://github.com/boto/boto3/issues/368
             instance_config.update(UserData=base64.b64encode(self.launch_script.encode()).decode("utf-8"))
-            response = ec2.request_spot_instances(InstanceCount=1, LaunchSpecification=instance_config,
-                                                  SpotPrice=str(spot_price), DryRun=dry)
+            response = ec2.request_spot_instances(
+                InstanceCount=1, LaunchSpecification=instance_config,
+                SpotPrice=str(spot_price), DryRun=dry)
             spot_request_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
             if verbose:
                 print(response)
+            if tags:
+                ec2.create_tags(DryRun=dry, Resources=[spot_request_id], Tags=tag_str)
             return spot_request_id
         else:
             instance_config.update(UserData=self.launch_script)
             response = ec2.run_instances(MaxCount=1, MinCount=1, **instance_config, DryRun=dry)
+            instance_id = response['Instances'][0]['InstanceId']
             if verbose:
                 print(response)
-            return response
+            if tags:
+                ec2.create_tags(DryRun=dry, Resources=[instance_id], Tags=tag_str)
+            return instance_id
 
     def manager_host_setup(self, host, verbose=None, **_):
         self.host_unpacked = True
