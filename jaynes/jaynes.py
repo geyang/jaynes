@@ -287,12 +287,17 @@ set +o posix
             instance_config.update(UserData=base64.b64encode(self.launch_script.encode()).decode("utf-8"))
             response = ec2.request_spot_instances(
                 InstanceCount=1, LaunchSpecification=instance_config,
+                AvailabilityZoneGroup=region,
                 SpotPrice=str(spot_price), DryRun=dry)
             spot_request_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
             if verbose:
-                print(response)
+                import yaml
+                print(yaml.dump(response))
             if tags:
                 ec2.create_tags(DryRun=dry, Resources=[spot_request_id], Tags=tag_str)
+            # if verbose:
+            #     result = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[spot_request_id])
+            #     print(result)
             return spot_request_id
         else:
             instance_config.update(UserData=self.launch_script)

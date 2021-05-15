@@ -311,15 +311,12 @@ class Docker(RunnerType):
     post_script = ""
 
     def __init__(self, *, image, mounts=None, work_directory=None, work_dir=None, setup="", startup=None,
-                 pypath=None, envs=None, entry_script="python -u -m jaynes.entry", name=None, use_gpu=False,
-                 sudo=False, ipc=None, tty=False, options=None, **_):
+                 pypath=None, envs=None, entry_script="python -u -m jaynes.entry", name=None,
+                 docker_cmd="docker", ipc=None, tty=False, options=None, **_):
         mount_string = " ".join([m.docker_mount for m in mounts])
         self.setup_script = setup
         self.docker_image = image
-        docker_cmd = "nvidia-docker" if use_gpu else "docker"
-        if sudo:
-            docker_cmd = "sudo " + docker_cmd
-        cmd = f"""echo "Running in docker{' (gpu)' if use_gpu else ''}";"""
+        cmd = f"""echo "Running in {docker_cmd}";"""
         cmd += inline(startup) if startup else ''
         cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath};" if pypath else ""
         cmd += f"cd '{work_dir}';" if work_dir else ""
@@ -346,7 +343,7 @@ class Docker(RunnerType):
         self.run_script_thunk = f"""
             {indent(self.setup_script, " " * 12).strip()}
             {remove_by_name if name else ""}
-            {test_gpu if use_gpu else ""}
+            {test_gpu if "nvidia" in docker_cmd else ""}
             echo 'Now run docker'
             {envs if envs else ""} {docker_cmd} run -i{"t" if tty else ""} {wd_config} {ipc_config} {rest_config} {mount_string} --name '{docker_container_name}' \\
             {image} /bin/bash -c '{cmd}'

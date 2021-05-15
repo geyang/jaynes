@@ -73,8 +73,9 @@ class S3Code(Mount):
     :return: self
     """
 
-    def __init__(self, *, s3_prefix, local_path, host_path=None, remote_tar=None, container_path=None, pypath=False,
-                 excludes=None, file_mask=None, name=None, compress=True, public=True, no_signin=True):
+    def __init__(self, *, s3_prefix, local_path, host_path=None, remote_tar=None,
+                 container_path=None, pypath=False, excludes=None, file_mask=None,
+                 name=None, compress=True, no_signin=True, acl=None, region=None):
         # I fucking hate the behavior of python defaults. -- GY
         file_mask = file_mask or "."  # file_mask can Not be None or "".
         excludes = excludes or "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'"
@@ -96,8 +97,7 @@ class S3Code(Mount):
                 mkdir -p '{self.temp_dir}'
                 # Do not use absolute path in tar.
                 tar {excludes} -c{"z" if compress else ""}f '{local_tar}' -C '{local_abs}' {file_mask}
-                # aws s3 cp '{local_tar}' '{s3_prefix}/{tar_name}' --only-show-errors
-                aws s3 cp '{local_tar}' '{s3_prefix}/{tar_name}' {'--acl public-read-write' if public else ''}
+                aws s3 cp '{local_tar}' '{s3_prefix}/{tar_name}' {'--acl {}'.format(acl) if acl else ''} {'--region {}'.format(region) if region else ''}
                 """
         remote_tar = remote_tar or f"/tmp/{tar_name}"
         self.host_path = host_path
@@ -208,7 +208,8 @@ class SSHCode(Mount):
     """
 
     def __init__(self, *, local_path=None, local_tar=None, host_path=None, remote_tar=None,
-                 container_path=None, pypath=False, excludes=None, file_mask=None, name=None, compress=True):
+                 container_path=None, pypath=False, excludes=None, file_mask=None, name=None,
+                 compress=True):
 
         # I fucking hate the behavior of python defaults. -- GY
         self.local_path = local_path
