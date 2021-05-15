@@ -298,6 +298,7 @@ set +o posix
             # if verbose:
             #     result = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[spot_request_id])
             #     print(result)
+            cprint(f'made instance request {spot_request_id}', 'blue')
             return spot_request_id
         else:
             instance_config.update(UserData=self.launch_script)
@@ -307,6 +308,7 @@ set +o posix
                 print(response)
             if tags:
                 ec2.create_tags(DryRun=dry, Resources=[instance_id], Tags=tag_str)
+            cprint(f'launched instance {instance_id}', 'green')
             return instance_id
 
     def manager_host_setup(self, host, verbose=None, **_):
@@ -421,6 +423,9 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
         RUN.project_root = os.path.dirname(config_path)
 
         from inspect import isclass
+
+        # add env class for interpolation
+        yaml.SafeLoader.add_constructor("!ENV", hydrate(dict, ctx), )
 
         for k, c in mounts.__dict__.items():
             if isclass(c):
