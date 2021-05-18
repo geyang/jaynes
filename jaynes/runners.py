@@ -72,6 +72,7 @@ class Slurm(RunnerType):
     :param name:
     :param comment:
     :param label:
+    :param post_script: a script attached to after run_script
     :param options: you can specify extra options beyond what is offered above.
     """
     setup_script = ""
@@ -81,7 +82,8 @@ class Slurm(RunnerType):
     def __init__(self, *, mounts=None, pypath="", setup="", startup=None, work_dir=None, envs=None,
                  n_gpu=None, shell="/bin/bash", entry_script="python -u -m jaynes.entry",
                  partition=None, time_limit: str = None, n_cpu=4, name=None, comment=None, label=False, args=None,
-                 **options):
+                 post_script="", **options):
+        self.post_script = post_script
         work_dir = work_dir or os.getcwd()
         # --get-user-env
         setup_cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running on login-node `hostname`"\n"""
@@ -144,7 +146,29 @@ class SlurmManager(RunnerType):
 
     def __init__(self, *, mounts=None, pypath="", setup="", startup=None, work_dir=None, envs=None,
                  n_gpu=None, entry_script="python -u -m jaynes.entry",
-                 partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, args=None, **options):
+                 partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, args=None,
+                 post_script="", **options):
+        """
+
+        :param mounts:
+        :param pypath:
+        :param setup:
+        :param startup:
+        :param work_dir:
+        :param envs:
+        :param n_gpu:
+        :param entry_script:
+        :param partition:
+        :param time_limit:
+        :param n_cpu:
+        :param name:
+        :param comment:
+        :param label:
+        :param args:
+        :param post_script: a script attached to after run_script
+        :param options:
+        """
+        self.post_script = post_script
         work_dir = work_dir or os.getcwd()
         # --get-user-env
         setup_cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running on login-node"\n"""
@@ -209,7 +233,7 @@ class Simple(RunnerType):
 
     def __init__(self, *, mounts=None, pypath="", work_dir=None, setup=None, startup=None, envs=None,
                  shell="/bin/bash", entry_script="python -u -m jaynes.entry", pipe="",
-                 cleanup="", detach=False, use_gpu=False, verbose=None, **_):
+                 cleanup="", detach=False, use_gpu=False, verbose=None, post_script="", **_):
         """
 
         :param mounts:
@@ -225,10 +249,12 @@ class Simple(RunnerType):
         :param detach: keep the process running after ssh detachment.
         :param use_gpu:
         :param verbose:
+        :param post_script: a script attached to after run_script
         :param _:
         """
         work_dir = work_dir or os.getcwd()
         cmd = ""
+        self.post_script = post_script
         if verbose:
             cmd += f"""printf "\\e[1;34m%-6s\\e[m" "Running on remote host {' (gpu)' if use_gpu else ''}";"""
         cmd += inline(startup) if startup else ''
@@ -303,6 +329,7 @@ class Docker(RunnerType):
     :param ipc: specify ipc for multiprocessing. Typically 'host'
     :param tty: almost never used. This is because when this script is ran, it is almost garanteed that the
                 ssh/bash session is not going to be tty.
+    :param post_script: a script attached to after run_script
     :param **kwargs: passed in as parameters to docker command.
                 memory="4g" gets translated into `--memory 4g`
     """
@@ -312,10 +339,13 @@ class Docker(RunnerType):
 
     def __init__(self, *, image, mounts=None, work_directory=None, work_dir=None, setup="", startup=None,
                  pypath=None, envs=None, entry_script="python -u -m jaynes.entry", name=None,
-                 docker_cmd="docker", ipc=None, tty=False, options=None, **_):
+                 docker_cmd="docker", ipc=None, tty=False, options=None,
+                 post_script="", **_):
         mount_string = " ".join([m.docker_mount for m in mounts])
         self.setup_script = setup
         self.docker_image = image
+        self.post_script = post_script
+
         cmd = f"""echo "Running in {docker_cmd}";"""
         cmd += inline(startup) if startup else ''
         cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath};" if pypath else ""

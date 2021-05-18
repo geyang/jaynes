@@ -75,7 +75,7 @@ class S3Code(Mount):
 
     def __init__(self, *, s3_prefix, local_path, host_path=None, remote_tar=None,
                  container_path=None, pypath=False, excludes=None, file_mask=None,
-                 name=None, compress=True, no_signin=True, acl=None, region=None):
+                 name=None, compress=True, no_signin=False, acl=None, region=None):
         # I fucking hate the behavior of python defaults. -- GY
         file_mask = file_mask or "."  # file_mask can Not be None or "".
         excludes = excludes or "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'"
@@ -85,30 +85,28 @@ class S3Code(Mount):
         local_tar = pathJoin(self.temp_dir, tar_name)
         from .jaynes import RUN
         local_abs = os.path.join(RUN.project_root, local_path)
-        if host_path:
-            assert os.path.isabs(host_path), "host_path path has to be absolute"
-        else:
+        if not host_path:
             host_path = f"/tmp/{name}"
 
         from .jaynes import RUN
         docker_abs = os.path.join(RUN.project_root, container_path) if container_path else local_abs
         self.local_script = f"""
                 type gtar >/dev/null 2>&1 && alias tar=`which gtar`
-                mkdir -p '{self.temp_dir}'
+                mkdir -p {self.temp_dir}
                 # Do not use absolute path in tar.
-                tar {excludes} -c{"z" if compress else ""}f '{local_tar}' -C '{local_abs}' {file_mask}
-                aws s3 cp '{local_tar}' '{s3_prefix}/{tar_name}' {'--acl {}'.format(acl) if acl else ''} {'--region {}'.format(region) if region else ''}
+                tar {excludes} -c{"z" if compress else ""}f {local_tar} -C {local_abs} {file_mask}
+                aws s3 cp {local_tar} {s3_prefix}/{tar_name} {'--acl {}'.format(acl) if acl else ''} {'--region {}'.format(region) if region else ''}
                 """
         remote_tar = remote_tar or f"/tmp/{tar_name}"
         self.host_path = host_path
         self.host_setup = f"""
-                aws s3 cp '{pathJoin(s3_prefix, tar_name)}' '{remote_tar}' {'--no-sign-request' if no_signin else ''}
-                mkdir -p '{host_path}'
-                tar -{"z" if compress else ""}xf '{remote_tar}' -C '{host_path}'
+                aws s3 cp {pathJoin(s3_prefix, tar_name)} {remote_tar} {'--no-sign-request' if no_signin else ''}
+                mkdir -p {host_path}
+                tar -{"z" if compress else ""}xf {remote_tar}{tar_name if remote_tar.endswith('/') else ""} -C {host_path}
                 """
         self.pypath = pypath
         self.container_path = docker_abs
-        self.docker_mount = f"-v '{host_path}':'{docker_abs}'"
+        self.docker_mount = f"-v {host_path}:{docker_abs}"
 
 
 class S3Output(Mount):
@@ -149,9 +147,9 @@ class S3Output(Mount):
             "ATTENTION: docker path has to be absolute, to make sure your code knows where it is writing to."
         if local_path:
             download_script = f"""
-                aws s3 cp --recursive {s3_prefix} '{local_path}' || echo "s3 bucket is EMPTY" """
+                aws s3 cp --recursive {s3_prefix} {local_path} || echo "s3 bucket is EMPTY" """
             self.local_script = f"""
-                mkdir -p '{local_path}'
+                mkdir -p {local_path}
                 while true; do
                     echo "downloading..." {download_script}
                     {f"sleep {interval}" if interval else ""}
@@ -161,10 +159,10 @@ class S3Output(Mount):
             print('S3UploadMount(**{}) generated no local_script.'.format(locals()))
             # pass
         self.upload_script = f"""
-                aws s3 cp --recursive '{host_path}' {s3_prefix} """  # --only-show-errors"""
+                aws s3 cp --recursive {host_path} {s3_prefix} """  # --only-show-errors"""
         self.host_setup = f"""
                 echo 'making main_log directory {host_path}'
-                mkdir -p '{host_path}'
+                mkdir -p {host_path}
                 echo "made main_log directory" """ + ("" if not sync_s3 else f"""
                 while true; do
                     echo "uploading..." {self.upload_script}
@@ -182,7 +180,7 @@ class S3Output(Mount):
                     fi
                 done & echo main_log sync initiated
                 """)
-        self.docker_mount = f"-v '{host_path}':'{container_path}'"
+        self.docker_mount = f"-v {host_path}:{container_path}"
         self.container_path = container_path
         self.pypath = pypath
 
@@ -240,17 +238,17 @@ class SSHCode(Mount):
 
         self.tar_script = f"""
                 type gtar >/dev/null 2>&1 && alias tar=`which gtar`
-                mkdir -p '{self.temp_dir}'
+                mkdir -p {self.temp_dir}
                 # Do not use absolute path in tar.
-                tar {self.excludes} -c{"z" if self.compress else ""}f '{self.local_tar}' -C '{local_abs}' {self.file_mask}
+                tar {self.excludes} -c{"z" if self.compress else ""}f {self.local_tar} -C {local_abs} {self.file_mask}
                 """
 
         self.host_setup = f"""
-                mkdir -p '{self.host_path}'
-                tar -{"z" if self.compress else ""}xf '{self.remote_tar}' -C '{self.host_path}'
+                mkdir -p {self.host_path}
+                tar -{"z" if self.compress else ""}xf {self.remote_tar}{tar_name if self.remote_tar.endswith('/') else ''} -C {self.host_path}
                 """
         # used by the docker runner
-        self.docker_mount = f"-v '{self.host_path}':'{self.container_path}'"
+        self.docker_mount = f"-v {self.host_path}:{self.container_path}"
 
     def upload(self, verbose=None, *, username, ip, pem=None, port=None, password=None, profile=None, **_):
         _port = "" if port is None else f"-p {port}"
