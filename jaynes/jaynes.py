@@ -42,12 +42,20 @@ class Jaynes:
 
     host_unpacked = None
 
-    def make_host_unpack_script(self, launch_dir="/tmp/jaynes-mount", delay=None, **_):
+    def make_host_unpack_script(self, launch_dir="/tmp/jaynes-mount", delay=None, root_config=None, **_):
+        """
+
+        :param launch_dir:
+        :param delay:
+        :param root_config: a setup script **before** anything is ran.
+        :param _:
+        :return:
+        """
         # the log_dir is primarily used for the run script. Therefore it should use ued here instead.
         log_path = os.path.join(launch_dir, "jaynes-launch.log")
         error_path = os.path.join(launch_dir, "jaynes-launch.err.log")
 
-        host_setup = "\n".join(
+        all_setup = "\n".join(
             [m.host_setup for m in self.mounts if hasattr(m, "host_setup") and m.host_setup]
         )
 
@@ -55,17 +63,17 @@ class Jaynes:
         #!/bin/bash
         # to allow process substitution
         set +o posix
+        {root_config or ""}
         mkdir -p {launch_dir}
         {{
-            # host_setup
-            {host_setup}
+            {all_setup}
             {f"sleep {delay}" if delay else ""}
         }} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
         """).strip()
 
         return host_unpack_script
 
-    def launch_local_docker(self, log_dir="/tmp/jaynes-mount", delay=None, verbose=False, dry=False):
+    def launch_local_docker(self, log_dir="/tmp/jaynes-mount", delay=None, verbose=False, dry=False, root_config=None):
         # the log_dir is primarily used for the run script. Therefore it should use ued here instead.
         log_path = os.path.join(log_dir, "jaynes-launch.log")
         error_path = os.path.join(log_dir, "jaynes-launch.err.log")
@@ -81,9 +89,9 @@ class Jaynes:
         #!/bin/bash
         # to allow process substitution
         set +o posix
+        {root_config or ""}
         mkdir -p {log_dir}
         {{
-            
             {host_setup}
 
             # upload_script
@@ -108,7 +116,7 @@ class Jaynes:
                          pipe_out=None,
                          setup=None, terminate_after=False,
                          delay=None, instance_tag=None, region=None,
-                         tee=True,
+                         tee=True, root_config=None,
                          **_):
         """
         function to make the host script
@@ -160,6 +168,7 @@ class Jaynes:
 #!/bin/bash
 # to allow process substitution
 set +o posix
+{root_config or ''}
 {log_setup or ''}
 {{
 {setup or ""}
