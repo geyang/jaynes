@@ -7,8 +7,7 @@ author=$(Ge Yang)
 author_email=$(yangge1987@gmail.com)
 
 # notes on python packaging: http://python-packaging.readthedocs.io/en/latest/minimal.html
-default:
-	git tag `< VERSION` && git push origin --tags && make publish
+default: publish release
 wheel:
 	rm -rf dist
 	python setup.py bdist_wheel
