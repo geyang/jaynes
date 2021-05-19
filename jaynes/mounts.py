@@ -4,7 +4,6 @@ from textwrap import dedent
 from uuid import uuid4
 
 from jaynes.shell import ck
-
 from .helpers import get_temp_dir
 
 
@@ -78,13 +77,13 @@ class S3Code(Mount):
                  container_path=None, pypath=False, excludes=None, file_mask=None,
                  name=None, compress=True, no_signin=False, acl=None, region=None):
         # I fucking hate the behavior of python defaults. -- GY
+        from .jaynes import RUN
         local_path = os.path.expandvars(local_path)
-        local_abs = os.path.abspath(local_path)
+        local_abs = os.path.join(RUN.config_root, local_path)
         if not host_path:
             host_path = f"/tmp/{name}"
         if container_path:
             container_path = os.path.expandvars(container_path)
-        if container_path:
             self.container_path = os.path.abspath(container_path)
         else:
             self.container_path = local_abs
@@ -165,11 +164,16 @@ class S3Output(Mount):
 
         assert os.path.isabs(container_path), \
             "ATTENTION: docker path has to be absolute, to make sure your code knows where it is writing to."
+
         if local_path:
+            from .jaynes import RUN
+            local_path = os.path.expandvars(local_path)
+            local_abs = os.path.join(RUN.config_root, local_path)
+
             download_script = f"""
                 aws s3 cp --recursive {s3_prefix} {local_path} || echo "s3 bucket is EMPTY" """
             self.local_script = f"""
-                mkdir -p {local_path}
+                mkdir -p {local_abs}
                 while true; do
                     echo "downloading..." {download_script}
                     {f"sleep {interval}" if interval else ""}
@@ -225,7 +229,7 @@ class SSHCode(Mount):
     :return: self
     """
 
-    def __init__(self, *, local_path=None, local_tar=None, host_path=None, remote_tar=None,
+    def __init__(self, *, local_path, local_tar=None, host_path=None, remote_tar=None,
                  container_path=None, pypath=False, excludes=None, file_mask=None, name=None,
                  compress=True):
 
@@ -240,6 +244,11 @@ class SSHCode(Mount):
         self.excludes = excludes or "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'"
         self.file_mask = file_mask or "."  # file_mask can Not be None or "".
 
+        from .jaynes import RUN
+        local_path = os.path.expandvars(local_path)
+        local_abs = os.path.join(RUN.config_root, local_path)
+        self.container_path = os.path.join(RUN.config_root, container_path) if container_path else local_abs
+
         if local_tar is None:
             name = name or uuid4()
             tar_name = f"{name}.tar"
@@ -249,10 +258,6 @@ class SSHCode(Mount):
             tar_name = os.path.basename(local_tar)
             self.temp_dir = os.path.dirname(local_tar)
             self.local_tar = local_tar
-
-        from .jaynes import RUN
-        local_abs = os.path.join(RUN.project_root, local_path)
-        self.container_path = os.path.join(RUN.project_root, container_path) if container_path else local_abs
 
         self.remote_tar = remote_tar or f"/tmp/{tar_name}"
 
@@ -309,6 +314,10 @@ class TarMount(Mount):
         self.file_mask = file_mask or "."  # file_mask can Not be None or "".
         self.excludes = excludes or "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'"
 
+        from .jaynes import RUN
+        local_path = os.path.expandvars(local_path)
+        local_abs = os.path.join(RUN.config_root, local_path)
+
         if local_tar is None:
             name = name or uuid4()
             tar_name = f"{name}.tar"
@@ -318,9 +327,6 @@ class TarMount(Mount):
             tar_name = os.path.basename(local_tar)
             self.temp_dir = os.path.dirname(local_tar)
             self.local_tar = local_tar
-
-        from .jaynes import RUN
-        local_abs = os.path.join(RUN.project_root, local_path)
 
         self.remote_tar = remote_tar or f"$TMPDIR/{tar_name}"
 

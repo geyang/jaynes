@@ -7,12 +7,13 @@ from textwrap import dedent
 from types import SimpleNamespace
 from typing import Union
 
+from termcolor import cprint
+
 from jaynes.client import JaynesClient
 from jaynes.helpers import cwd_ancestors, omit, hydrate, snake2camel
 from jaynes.runners import Docker, Simple
 from jaynes.shell import ck
 from jaynes.templates import ec2_terminate, ssh_remote_exec
-from termcolor import cprint
 
 
 class Jaynes:
@@ -367,7 +368,7 @@ set +o posix
 
 class RUN:
     count = 0
-    project_root = None
+    config_root = None  # This is the absolute path to the `.jaynes.yml` config file. Used to produce mount paths.
     raw = None
     J: Jaynes = None
     config = None
@@ -415,7 +416,7 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
     # RUN.reset()  # do not reset the clock
     RUN.mode = mode
 
-    ctx = dict(env=SimpleNamespace(**os.environ), now=datetime.now(), uuid=uuid4(), **ext)
+    ctx = dict(env=SimpleNamespace(**os.environ), now=datetime.now(), uuid=uuid4(), RUN=RUN, **ext)
 
     if RUN.J is None:
         if config_path is None:
@@ -429,7 +430,7 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
             cprint('No `.jaynes.yml` is found. Run `jaynes.init` to create a configuration file.', "red")
             return
 
-        RUN.project_root = os.path.dirname(config_path)
+        RUN.config_root = os.path.dirname(config_path)
 
         from inspect import isclass
 
