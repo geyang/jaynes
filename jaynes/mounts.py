@@ -24,11 +24,11 @@ class Simple(Mount):
     :param pypath: boolean flag for whether this mount point should be included in the PYPATH environment variable
     """
 
-    def __init__(self, host_path, container_path, pypath=False):
+    def __init__(self, host_path, container_path, docker_mount_type="bind", pypath=False):
         # host_path = remote if os.path.isabs(remote) else pathJoin(self.remote_cwd, remote)
         assert os.path.isabs(host_path), "remote path has to be absolute"
         assert os.path.isabs(container_path), "docker linked path has to be absolute"
-        self.docker_mount = f"-v {host_path}:{container_path}"
+        self.docker_mount = f"--mount type={docker_mount_type},source={host_path},target={container_path}"
         self.host_path = host_path
         self.container_path = container_path
         self.pypath = pypath
@@ -73,8 +73,9 @@ class S3Code(Mount):
     """
 
     def __init__(self, *, s3_prefix, local_path, host_path=None,
-                 remote_tar=None,
-                 container_path=None, pypath=False, excludes=None, file_mask=None,
+                 remote_tar=None, container_path=None,
+                 docker_mount_type="bind",
+                 pypath=False, excludes=None, file_mask=None,
                  name=None, compress=True, no_signin=False, acl=None, region=None):
         # I fucking hate the behavior of python defaults. -- GY
         from .jaynes import RUN
@@ -111,8 +112,6 @@ class S3Code(Mount):
                     mkdir -p {host_path}
                     tar -{"z" if compress else ""}xf {remote_tar}{tar_name if remote_tar.endswith('/') else ""} -C {host_path}
                     """
-            self.pypath = pypath
-            self.docker_mount = f"-v {host_path}:{self.container_path}"
         else:
             filename = os.path.basename(local_path)
             self.local_script = f"""
@@ -124,8 +123,9 @@ class S3Code(Mount):
                     mkdir -p {host_dir}
                     aws s3 cp {s3_prefix}/{filename} {host_path} {'--no-sign-request' if no_signin else ''}
                     """
-            self.pypath = pypath
-            self.docker_mount = f"-v {host_path}:{self.container_path}"
+
+        self.pypath = pypath
+        self.docker_mount = f"--mount type={docker_mount_type},source={host_path},target={self.container_path}"
 
 
 class S3Output(Mount):
