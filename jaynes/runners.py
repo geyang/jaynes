@@ -319,8 +319,8 @@ class Docker(RunnerType):
     :param startup: the script you want to run first INSIDE docker
     :param mount:
     :param pypath:
-    :param work_directory:
-    :param work_dir:
+    :param workdir: this is the option passed on to docker.
+    :param work_dir: this is the current work direction for bash script.
     :param envs: Set of environment key and variables, a string
     :param entry_script: "python -u -m jaynes.entry"
     :param name: Name of the docker container instance, use uuid if is None
@@ -337,7 +337,7 @@ class Docker(RunnerType):
     run_script = ""
     post_script = ""
 
-    def __init__(self, *, image, mounts=None, work_directory=None, work_dir=None, setup="", startup=None,
+    def __init__(self, *, image, mounts=None, workdir=None, work_dir=None, setup="", startup=None,
                  pypath=None, envs=None, entry_script="python -u -m jaynes.entry", name=None,
                  docker_cmd="docker", ipc=None, tty=False, post_script="", **options):
         mount_string = " ".join([m.docker_mount for m in mounts])
@@ -365,7 +365,7 @@ class Docker(RunnerType):
             {envs if envs else ""} {docker_cmd} rm {docker_container_name}""" if docker_container_name else ""
 
         ipc_config = f"--ipc={ipc}" if ipc else ""
-        wd_config = f"-w={work_directory}" if work_directory else ""
+        wd_config = f"-w={workdir}" if workdir else ""
         rest_config = ""
         options = options or {}
         for k, v in options.items():
