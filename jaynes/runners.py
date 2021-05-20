@@ -339,12 +339,13 @@ class Docker(RunnerType):
 
     def __init__(self, *, image, mounts=None, work_directory=None, work_dir=None, setup="", startup=None,
                  pypath=None, envs=None, entry_script="python -u -m jaynes.entry", name=None,
-                 docker_cmd="docker", ipc=None, tty=False, options=None,
-                 post_script="", **_):
+                 docker_cmd="docker", ipc=None, tty=False, post_script="", **options):
         mount_string = " ".join([m.docker_mount for m in mounts])
         self.setup_script = setup
         self.docker_image = image
         self.post_script = post_script
+
+        is_gpu = options.get('gpus', None) or "nvidia" in docker_cmd
 
         cmd = f"""echo "Running in {docker_cmd}";"""
         cmd += inline(startup) if startup else ''
@@ -373,7 +374,7 @@ class Docker(RunnerType):
         self.run_script_thunk = f"""
             {indent(self.setup_script, " " * 12).strip()}
             {remove_by_name if name else ""}
-            {test_gpu if "nvidia" in docker_cmd else ""}
+            {test_gpu if is_gpu else ""}
             echo 'Now run docker'
             {envs if envs else ""} {docker_cmd} run -i{"t" if tty else ""} {wd_config} {ipc_config} {rest_config} {mount_string} --name '{docker_container_name}' \\
             {image} /bin/bash -c '{cmd}'
