@@ -21,7 +21,7 @@ J.set_runner(
                                use_gpu=False).run(train, log_dir=RUN.log_dir)
 )
 J.run_local_setup(verbose=True)
-J.make_host_script(log_dir=output_mount.remote_path, instance_tag=RUN.instance_prefix, sudo=False,
+J.make_host_script(log_dir=output_mount.remote_path, ec2_name=RUN.instance_prefix, sudo=False,
                    terminate_after_finish=True)
 response = J.launch_ec2(region="us-west-2", image_id="ami-bd4fd7c5", instance_type="p2.xlarge", key_name="ge-berkeley",
              security_group="torch-gym-prebuilt", spot_price=None,

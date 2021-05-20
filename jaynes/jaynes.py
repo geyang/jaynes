@@ -7,12 +7,13 @@ from textwrap import dedent
 from types import SimpleNamespace
 from typing import Union
 
+from termcolor import cprint
+
 from jaynes.client import JaynesClient
 from jaynes.helpers import cwd_ancestors, omit, hydrate, snake2camel
 from jaynes.runners import Docker, Simple
 from jaynes.shell import ck
 from jaynes.templates import ec2_terminate, ssh_remote_exec
-from termcolor import cprint
 
 
 class Jaynes:
@@ -115,8 +116,8 @@ class Jaynes:
                          launch_dir="~/jaynes-launch",
                          pipe_out=None,
                          setup=None, terminate_after=False,
-                         delay=None, instance_tag=None, region=None,
-                         tee=True, root_config=None,
+                         delay=None, ec2_name=None, region=None,
+                         root_config=None,
                          **_):
         """
         function to make the host script
@@ -125,7 +126,7 @@ class Jaynes:
         :param sudo:
         :param terminate_after:
         :param delay:
-        :param instance_tag:
+        :param ec2_name: less than 128 ascii characters
         :param region:
         :return:
         """
@@ -146,21 +147,19 @@ class Jaynes:
         host_unpack_script = "" if self.host_unpacked else "\n".join(
             [m.host_setup for m in self.mounts if hasattr(m, "host_setup") and m.host_setup]
         )
-        if instance_tag:
-            assert len(instance_tag) <= 128, "Error: ws limits instance tag to 128 unicode characters."
+        if ec2_name:
+            assert len(ec2_name) <= 128, "Error: ws limits instance tag to 128 unicode characters."
 
-        if instance_tag:
+        if ec2_name:
             assert region, "region need to be specified if instance tag is given."
         if terminate_after:
             assert region, "region need to be specified if instance is self-terminating."
 
         tag_current_instance = f"""
-            if [ `cat /sys/devices/virtual/dmi/id/bios_version` == 1.0 ] || [[ -f /sys/hypervisor/uuid && `head -c 3 /sys/hypervisor/uuid` == ec2 ]]; then
-                echo "Is EC2 Instance"
-                EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
-                aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=Name,Value={instance_tag}' --region {region}
-                aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=exp_prefix,Value={instance_tag}' --region {region};
-            fi
+        if [ `cat /sys/devices/virtual/dmi/id/bios_version` == 1.0 ] || [[ -f /sys/hypervisor/uuid && `head -c 3 /sys/hypervisor/uuid` == ec2 ]]; then
+            EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
+            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=Name,Value={ec2_name}' --region {region}
+        fi
         """
         # NOTE: path.join is running on local computer, so it might not be quite right if remote is say windows.
         # NOTE: dedent is required by aws EC2.
@@ -172,7 +171,7 @@ set +o posix
 {log_setup or ''}
 {{
 {setup or ""}
-{tag_current_instance if instance_tag else ""}
+{tag_current_instance if ec2_name else ""}
 {host_unpack_script}
             # upload_script from within the host.
 {upload_script}
@@ -300,9 +299,6 @@ set +o posix
             instance_config.update(UserData=base64.b64encode(self.launch_script.encode()).decode("utf-8"))
             response = ec2.request_spot_instances(
                 InstanceCount=1, LaunchSpecification=instance_config,
-                # does not help in `us-west-2` region, because `us-west-2d` is missing the instance types.
-                # AvailabilityZoneGroup='us-west-2',
-                # AvailabilityZoneGroup=region,
                 SpotPrice=str(spot_price), DryRun=dry)
             spot_request_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
             if verbose:
@@ -310,9 +306,6 @@ set +o posix
                 print(yaml.dump(response))
             if tags:
                 ec2.create_tags(DryRun=dry, Resources=[spot_request_id], Tags=tag_str)
-            # if verbose:
-            #     result = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[spot_request_id])
-            #     print(result)
             cprint(f'made instance request {spot_request_id}', 'blue')
             return spot_request_id
         else:

@@ -21,6 +21,6 @@ J.set_runner(
                                use_gpu=False).run(train, log_dir=RUN.log_dir)
 )
 J.run_local_setup(verbose=True)
-J.make_host_script(log_dir=output_mount.remote_path, instance_tag=RUN.instance_prefix, sudo=True,
+J.make_host_script(log_dir=output_mount.remote_path, ec2_name=RUN.instance_prefix, sudo=True,
                    terminate_after_finish=True)
 J.launch_ssh(ip="34.217.66.113", pem="~/.ec2/ge-berkeley.pem", script_dir=output_mount.remote_path, verbose=True)
