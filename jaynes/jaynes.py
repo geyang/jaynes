@@ -7,13 +7,12 @@ from textwrap import dedent
 from types import SimpleNamespace
 from typing import Union
 
-from termcolor import cprint
-
 from jaynes.client import JaynesClient
 from jaynes.helpers import cwd_ancestors, omit, hydrate, snake2camel
 from jaynes.runners import Docker, Simple
 from jaynes.shell import ck
 from jaynes.templates import ec2_terminate, ssh_remote_exec
+from termcolor import cprint
 
 
 class Jaynes:
@@ -275,6 +274,7 @@ set +o posix
 
     def launch_ec2(self, region, image_id, instance_type, key_name, security_group,
                    spot_price=None, iam_instance_profile_arn=None, verbose=False,
+                   availability_zone=None,
                    dry=False, name=None, tags={}, **_):
         import boto3
         if verbose:
@@ -283,7 +283,10 @@ set +o posix
 
         instance_config = dict(ImageId=image_id, KeyName=key_name, InstanceType=instance_type,
                                SecurityGroups=(security_group,),
-                               IamInstanceProfile=dict(Arn=iam_instance_profile_arn))
+                               IamInstanceProfile=dict(Arn=iam_instance_profile_arn),
+                               )
+        if availability_zone:
+            instance_config['Placement'] = dict(AvailabilityZone=availability_zone)
 
         tags = {snake2camel(k): v for k, v in tags.items()}
         if name:
@@ -297,7 +300,9 @@ set +o posix
             instance_config.update(UserData=base64.b64encode(self.launch_script.encode()).decode("utf-8"))
             response = ec2.request_spot_instances(
                 InstanceCount=1, LaunchSpecification=instance_config,
-                AvailabilityZoneGroup=region,
+                # does not help in `us-west-2` region, because `us-west-2d` is missing the instance types.
+                # AvailabilityZoneGroup='us-west-2',
+                # AvailabilityZoneGroup=region,
                 SpotPrice=str(spot_price), DryRun=dry)
             spot_request_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
             if verbose:
