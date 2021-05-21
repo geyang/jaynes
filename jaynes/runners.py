@@ -350,7 +350,7 @@ class Docker(RunnerType):
         cmd = f"""echo "Running in {docker_cmd}";"""
         cmd += inline(startup) if startup else ''
         cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath};" if pypath else ""
-        cmd += f"cd '{work_dir}';" if work_dir else ""
+        cmd += f"cd {work_dir};" if work_dir else ""
         cmd += f"""{JAYNES_PARAMS_KEY}={{encoded_thunk}} {entry_script}"""
         docker_container_name = name or uuid4()
 
