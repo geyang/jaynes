@@ -297,9 +297,13 @@ set +o posix
             #     http://boto3.readthedocs.io/en/latest/reference/services/ec2.html#EC2.Client.request_spot_instances
             # issue here: https://github.com/boto/boto3/issues/368
             instance_config.update(UserData=base64.b64encode(self.launch_script.encode()).decode("utf-8"))
-            response = ec2.request_spot_instances(
-                InstanceCount=1, LaunchSpecification=instance_config,
-                SpotPrice=str(spot_price), DryRun=dry)
+            # add error handling here to return spot_instance_request_id = None
+            try:
+                response = ec2.request_spot_instances(
+                    InstanceCount=1, LaunchSpecification=instance_config,
+                    SpotPrice=str(spot_price), DryRun=dry)
+            except:
+                return None
             spot_request_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
             if verbose:
                 import yaml

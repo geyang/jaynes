@@ -191,7 +191,7 @@ class SlurmManager(RunnerType):
             cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker `hostname`";"""
             # todo: change this.
             cmd += inline(startup) if startup else ""
-            cmd += f"""{"cd '{}';".format(work_dir) if work_dir else ""}"""
+            cmd += f"""{"cd {};".format(work_dir) if work_dir else ""}"""
 
             slurm_cmd = f"srun {gres} --partition={partition} --time={time_limit} " \
                         f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
@@ -353,10 +353,6 @@ class Docker(RunnerType):
         cmd += f"cd '{work_dir}';" if work_dir else ""
         cmd += f"""{JAYNES_PARAMS_KEY}={{encoded_thunk}} {entry_script}"""
         docker_container_name = name or uuid4()
-        test_gpu = f"""
-                echo 'Testing nvidia-smi inside docker'
-                {envs if envs else ""} {docker_cmd} run --rm {image} nvidia-smi
-                """
 
         remove_by_name = f"""
             echo -ne 'kill running instances '
@@ -370,6 +366,10 @@ class Docker(RunnerType):
         options = options or {}
         for k, v in options.items():
             rest_config += f"--{k.replace('_', '-')}={v}"
+        test_gpu = f"""
+                echo 'Testing nvidia-smi inside docker'
+                {envs if envs else ""} {docker_cmd} run --rm {rest_config} {image} nvidia-smi
+                """
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""
             {indent(self.setup_script, " " * 12).strip()}
