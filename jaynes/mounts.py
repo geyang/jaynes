@@ -4,6 +4,7 @@ from textwrap import dedent
 from uuid import uuid4
 
 from jaynes.shell import ck
+
 from .helpers import get_temp_dir
 
 
@@ -302,8 +303,9 @@ class TarMount(Mount):
     tar_path = None
     host_path = None
 
-    def __init__(self, *_, local_path, local_tar=None, remote_tar=None, host_path=None, container_path=None,
-                 pypath=False, name=None, excludes=None, file_mask=None, compress=True):
+    def __init__(self, *_, local_path, local_tar=None, remote_tar=None, host_path=None,
+                 container_path=None, pypath=False, name=None, excludes=None, file_mask=None,
+                 compress=True):
         self.local_path = local_path
         self.host_path = host_path
         self.container_path = container_path or host_path
@@ -356,18 +358,17 @@ class TarMount(Mount):
         client = JaynesClient(host, token=token)
 
         # grep to speed up transmission
-        stdout, *_ = client.execute(f"ls {parent_dir} | grep {tar_name}")
-        print(stdout, *_)
-        r = client.execute(f"ls {parent_dir} | grep {tar_name}")
-        print(r)
-        if tar_name in r[1]:
-            print('remote tar already exists', self.remote_tar)
-        else:
-            client.execute(f"mkdir -p {parent_dir}")
-            client.upload_file(self.local_tar, self.remote_tar)
+        stdout, stderr, error = client.execute(f"ls {parent_dir} | grep {tar_name}")
 
-            stdout, *_ = client.execute(f"echo {parent_dir}")
-            if verbose:
-                print(stdout, parent_dir, self.remote_tar, )
-            stdout, *_ = client.execute(f"ls {parent_dir} | grep {tar_name}")
-            assert tar_name in stdout, "file upload failed" + stdout
+        if tar_name in stdout:
+            print('remote tar already exists', self.remote_tar)
+            return
+
+        client.execute(f"mkdir -p {parent_dir}")
+        client.upload_file(self.local_tar, self.remote_tar)
+
+        stdout, *_ = client.execute(f"echo {parent_dir}")
+        if verbose:
+            print(stdout, parent_dir, self.remote_tar, )
+        stdout, *_ = client.execute(f"ls {parent_dir} | grep {tar_name}")
+        assert tar_name in stdout, "file upload failed" + stdout

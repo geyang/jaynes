@@ -7,7 +7,6 @@ from textwrap import dedent
 from types import SimpleNamespace
 from typing import Union
 
-from termcolor import cprint
 
 from jaynes.client import JaynesClient
 from jaynes.helpers import cwd_ancestors, omit, hydrate, snake2camel
@@ -275,6 +274,7 @@ set +o posix
                    spot_price=None, iam_instance_profile_arn=None, verbose=False,
                    availability_zone=None,
                    dry=False, name=None, tags={}, **_):
+        from termcolor import cprint
         import boto3
         if verbose:
             print('Using the default AWS Profile')
@@ -297,13 +297,9 @@ set +o posix
             #     http://boto3.readthedocs.io/en/latest/reference/services/ec2.html#EC2.Client.request_spot_instances
             # issue here: https://github.com/boto/boto3/issues/368
             instance_config.update(UserData=base64.b64encode(self.launch_script.encode()).decode("utf-8"))
-            # add error handling here to return spot_instance_request_id = None
-            try:
-                response = ec2.request_spot_instances(
-                    InstanceCount=1, LaunchSpecification=instance_config,
-                    SpotPrice=str(spot_price), DryRun=dry)
-            except:
-                return None
+            response = ec2.request_spot_instances(
+                InstanceCount=1, LaunchSpecification=instance_config,
+                SpotPrice=str(spot_price), DryRun=dry)
             spot_request_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
             if verbose:
                 import yaml
@@ -337,6 +333,7 @@ set +o posix
 
     def launch_manager(self, host, launch_dir, script_name="jaynes_launch.sh", project=None, user=None, token=None,
                        sudo=False, cleanup=True, verbose=False, timeout=None, **_):
+        from termcolor import cprint
 
         tf = tempfile.NamedTemporaryFile(prefix="jaynes_launcher-", suffix=".sh", delete=False)
         with open(tf.name, 'w') as f:
@@ -351,15 +348,15 @@ set +o posix
         if verbose:
             print(self.launch_script)
 
-        cmd = f"bash {remote_script_name}"
-        r = client.execute(cmd, timeout)
-        if not len(r):
-            print(r)
-        else:
-            if r[0]:
-                print(r[0])
-            if r[1]:
-                cprint(r[1], "red")
+        r = client.execute(f"bash {remote_script_name}", timeout)
+        try:
+            stdout, stderr, error = r
+            if stdout:
+                print(stdout)
+            if error or stderr:
+                cprint(stderr, color="red")
+        except Exception as e:
+            cprint(r, color="red")
 
     # aliases of launch scripts
     local_docker = launch_local_docker
@@ -480,14 +477,9 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
         local_copy.update(launch)
         RUN.config["launch"] = local_copy
 
-    if host:
-        local_copy = RUN.config['host']
-        local_copy.update(host)
-        RUN.config["host"] = local_copy
-
     RUN.config.update(ctx)
     RUN.J.set_mount(*RUN.config.get("mounts", []))
-    RUN.J.upload_mount(**RUN.config.get('host', {}), verbose=RUN.config.get('verbose', None))
+    RUN.J.upload_mount(**RUN.config.get('launch', {}), verbose=RUN.config.get('verbose', None))
 
 
 def run(fn, *args, __run_config=None, **kwargs, ):
@@ -536,14 +528,11 @@ def run(fn, *args, __run_config=None, **kwargs, ):
     j.runner.run(fn, *args, **kwargs)
 
     # config.HOST
-    host_config = RUN.config.get('host', {})
-
-    launch_config = {k: v.format(**context) if isinstance(v, str) else v
-                     for k, v in RUN.config['launch'].items()}
+    launch_config = RUN.config.get('launch', {})
 
     if launch_config['type'].startswith('ssh') and not j.host_unpacked:
 
-        j.host_unpacked = j.make_host_unpack_script(**host_config)
+        j.host_unpacked = j.make_host_unpack_script(**launch_config)
         if RUN.config.get('verbose', False):
             print('Unpacking On Remote')
         j.launch_script = j.host_unpacked
@@ -552,14 +541,14 @@ def run(fn, *args, __run_config=None, **kwargs, ):
 
     if launch_config['type'] == "manager" and not j.host_unpacked:
         cprint('unpacking code remotely...', color="green")
-        j.manager_host_setup(**host_config, verbose=RUN.config.get('verbose'))
+        j.manager_host_setup(**launch_config, verbose=RUN.config.get('verbose'))
 
-    j.make_host_script(**host_config)
+    j.make_host_script(**launch_config)
     if RUN.config.get('verbose'):
         print(j.launch_script)
 
     # config.LAUNCH
-    kwargs = host_config.copy()
+    kwargs = launch_config.copy()
     kwargs.update(omit(launch_config, 'type'))
     kwargs['verbose'] = RUN.config.get('verbose')
 
