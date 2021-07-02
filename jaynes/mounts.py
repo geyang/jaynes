@@ -4,7 +4,6 @@ from textwrap import dedent
 from uuid import uuid4
 
 from jaynes.shell import ck
-
 from .helpers import get_temp_dir
 
 
@@ -17,11 +16,12 @@ class Mount:
         assert not ck(dedent(self.local_script or ""), verbose=verbose, shell=True)
 
 
-class Simple(Mount):
+class Host(Mount):
     """Mount a directory from the remote host to docker
 
     :param host_path: path on the host
     :param container_path: path inside the container
+    :param docker_mount_type: "bind" the mount type, one of "bind," "volume," or "tmpfs."
     :param pypath: boolean flag for whether this mount point should be included in the PYPATH environment variable
     """
 
@@ -29,10 +29,10 @@ class Simple(Mount):
         # host_path = remote if os.path.isabs(remote) else pathJoin(self.remote_cwd, remote)
         assert os.path.isabs(host_path), "remote path has to be absolute"
         assert os.path.isabs(container_path), "docker linked path has to be absolute"
-        self.docker_mount = f"--mount type={docker_mount_type},source={host_path},target={container_path}"
         self.host_path = host_path
         self.container_path = container_path
         self.pypath = pypath
+        self.docker_mount = f"--mount type={docker_mount_type},source={host_path},target={container_path}"
 
 
 class S3Code(Mount):

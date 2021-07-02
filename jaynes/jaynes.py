@@ -7,7 +7,6 @@ from textwrap import dedent
 from types import SimpleNamespace
 from typing import Union
 
-
 from jaynes.client import JaynesClient
 from jaynes.helpers import cwd_ancestors, omit, hydrate, snake2camel
 from jaynes.runners import Docker, Simple
@@ -414,6 +413,7 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
 
     # RUN.reset()  # do not reset the clock
     RUN.mode = mode
+    cprint(f"Launching {mode or '<default>'} mode", color="blue")
 
     ctx = dict(env=SimpleNamespace(**os.environ), now=datetime.now(), uuid=uuid4(), RUN=RUN, **ext)
 
