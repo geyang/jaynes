@@ -26,9 +26,6 @@ class Host(Mount):
     """
 
     def __init__(self, host_path, container_path, docker_mount_type="bind", pypath=False):
-        # host_path = remote if os.path.isabs(remote) else pathJoin(self.remote_cwd, remote)
-        assert os.path.isabs(host_path), "remote path has to be absolute"
-        assert os.path.isabs(container_path), "docker linked path has to be absolute"
         self.host_path = host_path
         self.container_path = container_path
         self.pypath = pypath
