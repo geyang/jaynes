@@ -327,6 +327,7 @@ class Docker(RunnerType):
     :param use_gpu:
     :param sudo: Flag, useful for when running on EC2
     :param ipc: specify ipc for multiprocessing. Typically 'host'
+    :param net: for ec2, `--net host` allows docker to use the host's IAM for ec2 services
     :param tty: almost never used. This is because when this script is ran, it is almost garanteed that the
                 ssh/bash session is not going to be tty.
     :param post_script: a script attached to after run_script
@@ -339,7 +340,7 @@ class Docker(RunnerType):
 
     def __init__(self, *, image, mounts=None, workdir=None, work_dir=None, setup="", startup=None,
                  pypath=None, envs=None, entry_script="python -u -m jaynes.entry", name=None,
-                 docker_cmd="docker", ipc=None, tty=False, post_script="", **options):
+                 docker_cmd="docker", ipc=None, tty=False, post_script="", net=None, **options):
         mount_string = " ".join([m.docker_mount for m in mounts])
         self.setup_script = setup
         self.docker_image = image
@@ -360,12 +361,13 @@ class Docker(RunnerType):
             echo -ne 'remove existing container '
             {envs if envs else ""} {docker_cmd} rm {docker_container_name}""" if docker_container_name else ""
 
-        ipc_config = f"--ipc={ipc}" if ipc else ""
-        wd_config = f"-w={workdir}" if workdir else ""
-        rest_config = ""
-        options = options or {}
-        for k, v in options.items():
-            rest_config += f"--{k.replace('_', '-')}={v}"
+        if workdir:
+            options['workdir'] = workdir
+        if net:
+            options['net'] = net
+        if ipc:
+            options['ipc'] = ipc
+        rest_config = " ".join(f"--{k.replace('_', '-')}={v}" for k, v in options.items())
         test_gpu = f"""
                 echo 'Testing nvidia-smi inside docker'
                 {envs if envs else ""} {docker_cmd} run --rm {rest_config} {image} nvidia-smi
@@ -376,7 +378,7 @@ class Docker(RunnerType):
             {remove_by_name if name else ""}
             {test_gpu if is_gpu else ""}
             echo 'Now run docker'
-            {envs if envs else ""} {docker_cmd} run -i{"t" if tty else ""} {wd_config} {ipc_config} {rest_config} {mount_string} --name '{docker_container_name}' \\
+            {envs if envs else ""} {docker_cmd} run -i{"t" if tty else ""} {rest_config} {mount_string} --name '{docker_container_name}' \\
             {image} /bin/bash -c '{cmd}'
             """
 
