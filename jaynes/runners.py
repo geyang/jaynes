@@ -67,6 +67,7 @@ class Slurm(RunnerType):
     :param entry_script: "python -u -m jaynes.entry"
     :param n_gpu:
     :param partition:
+    :param n_seq_jobs: int, set a value > 1 if you run a sequence of jobs with :code:`sbatch`.
     :param time_limit:
     :param n_cpu:
     :param name:
@@ -81,7 +82,7 @@ class Slurm(RunnerType):
 
     def __init__(self, *, mounts=None, pypath="", setup="", startup=None, work_dir=None, envs=None,
                  n_gpu=None, shell="/bin/bash", entry_script="python -u -m jaynes.entry",
-                 partition=None, time_limit: str = None, n_cpu=4, name=None, comment=None, label=False, args=None,
+                 partition=None, n_seq_jobs=1, time_limit: str = None, n_cpu=4, name=None, comment=None, label=False, args=None,
                  post_script="", **options):
         self.post_script = post_script
         work_dir = work_dir or os.getcwd()
@@ -116,21 +117,50 @@ class Slurm(RunnerType):
         if startup:
             """
             use bash mode if there is a startup script. This is not supported on some clusters.
-            For example in vector institute's cluster this does not direct outputs to the 
+            For example in vector institute's cluster this does not direct outputs to the
             stdout.
             """
             cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker `hostname`";"""
             cmd += inline(startup)
             cmd += f"""{'cd {};'.format(work_dir) if work_dir else ''}"""
-            slurm_cmd = f"srun {option_str} {extra_options} {shell} -c '{cmd} {entry_env} {entry_script}'"
+            srun_cmd = f"srun {option_str} {extra_options} {shell} -c '{cmd} {entry_env} {entry_script}'"
         else:
             """
             call the python entry script directly, does not work on the FAIR cluster.
             """
-            slurm_cmd = f"{entry_env} srun {option_str} {extra_options} {entry_script}"
+            cmd = ""
+            srun_cmd = f"{entry_env} srun {option_str} {extra_options} {entry_script}"
+
+        if n_seq_jobs > 1:
+            """
+            use sbatch to submit a sequence of jobs.
+            sbatch job saves stdout/stderr to a log file, thus this script waits until the file
+            shows up and runs `tail -f` for it.
+            NOTE: It's quite hard to run `tail -f` on all the logfiles in the proper order,
+            thus it is only applied to the first job.
+            """
+            name = name or uuid4()
+            logfile = f"{work_dir}/slurm-%j.out"
+            sbatch_options = (f"--output {logfile}", f"--error {logfile}")
+            sbatch_options = "\n".join(["#SBATCH " + opt for opt in sbatch_options])
+            sbatch_cmd = ""
+            for i in range(n_seq_jobs):
+                sbatch_cmd += f"sbatch {option_str} {extra_options} -J {name} -d singleton" \
+                    f"<<<'#!/bin/bash\n{sbatch_options}\n{cmd}\n{entry_env} {entry_script}'\n"
+                if i == 0:
+                    # NOTE: store the "Submitted batch job xxx" message to $SUBMISSION,
+                    # and some shell magic to extract the last word that is jobid.
+                    # ref: https://stackoverflow.com/a/20021078/7057866
+                    sbatch_cmd = f"SUBMISSION=$({sbatch_cmd}) && echo $SUBMISSION &&" \
+                        f"JOBID=${{{{SUBMISSION##* }}}} &&" \
+                        f"LOGFILE={work_dir}/slurm-$JOBID.out &&" \
+                        "echo Logs are stored at $LOGFILE\n"
+            # wait until the logfile is generated
+            wait_logic = f"while [ ! -f $LOGFILE ]; do sleep 1; done"
+            sbatch_cmd = f"{sbatch_cmd} {wait_logic} && tail -f $LOGFILE"
 
         self.run_script_thunk = f""" 
-        {setup_cmd} {envs if envs else ""} {slurm_cmd} """
+        {setup_cmd} {envs if envs else ""} {srun_cmd if n_seq_jobs <= 1 else sbatch_cmd} """
 
     def run(self, fn, *args, **kwargs):
         encoded_thunk = serialize(fn, args, kwargs)
