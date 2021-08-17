@@ -68,6 +68,7 @@ class Slurm(RunnerType):
     :param n_gpu:
     :param partition:
     :param n_seq_jobs: int, set a value > 1 if you run a sequence of jobs with :code:`sbatch`.
+    :param use_sbatch: bool, force to run a job with :code:`sbatch` regardless of the value of :code:`n_seq_jobs`
     :param time_limit:
     :param n_cpu:
     :param name:
@@ -82,7 +83,7 @@ class Slurm(RunnerType):
 
     def __init__(self, *, mounts=None, pypath="", setup="", startup=None, work_dir=None, envs=None,
                  n_gpu=None, shell="/bin/bash", entry_script="python -u -m jaynes.entry",
-                 partition=None, n_seq_jobs=1, time_limit: str = None, n_cpu=4, name=None, comment=None, label=False, args=None,
+                 partition=None, n_seq_jobs=1, use_sbatch=False, time_limit: str = None, n_cpu=4, name=None, comment=None, label=False, args=None,
                  post_script="", **options):
         self.post_script = post_script
         work_dir = work_dir or os.getcwd()
@@ -131,7 +132,7 @@ class Slurm(RunnerType):
             cmd = ""
             srun_cmd = f"{entry_env} srun {option_str} {extra_options} {entry_script}"
 
-        if n_seq_jobs > 1:
+        if use_sbatch or n_seq_jobs > 1:
             """
             use sbatch to submit a sequence of jobs.
             sbatch job saves stdout/stderr to a log file, thus this script waits until the file
