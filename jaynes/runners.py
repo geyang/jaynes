@@ -132,7 +132,8 @@ class Slurm(RunnerType):
             cmd = ""
             srun_cmd = f"{entry_env} srun {option_str} {extra_options} {entry_script}"
 
-        if use_sbatch or n_seq_jobs > 1:
+        use_sbatch = use_sbatch or n_seq_jobs > 1
+        if use_sbatch:
             """
             use sbatch to submit a sequence of jobs.
             sbatch job saves stdout/stderr to a log file, thus this script waits until the file
@@ -161,7 +162,7 @@ class Slurm(RunnerType):
             sbatch_cmd = f"{sbatch_cmd} {wait_logic} && tail -f $LOGFILE"
 
         self.run_script_thunk = f""" 
-        {setup_cmd} {envs if envs else ""} {srun_cmd if n_seq_jobs <= 1 else sbatch_cmd} """
+        {setup_cmd} {envs if envs else ""} {sbatch_cmd if use_sbatch else srun_cmd} """
 
     def run(self, fn, *args, **kwargs):
         encoded_thunk = serialize(fn, args, kwargs)
