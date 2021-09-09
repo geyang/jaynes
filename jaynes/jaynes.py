@@ -509,22 +509,22 @@ def run(fn, *args, __run_config=None, **kwargs, ):
     RUN.count += 1
     # todo: mapping current work directory correction on the remote instance.
 
-    _ = {}
+    irunner_kwarg_hydrated = {}
     for k, v in runner_kwargs.items():
         if type(v) is str:
             try:
-                _[k] = v.format(**context)
+                irunner_kwarg_hydrated[k] = v.format(**context)
             except IndexError as e:
                 a = '\n'
                 print(f"{k} '{v}' context: {list(context.items())}")
                 raise e
         else:
-            _[k] = v  # _ = {k: v.format(**context) if type(v) is str else v for k, v in runner_kwargs.items()}
-    if 'work_dir' not in _:
-        _['work_dir'] = os.getcwd()
+            irunner_kwarg_hydrated[k] = v  # _ = {k: v.format(**context) if type(v) is str else v for k, v in runner_kwargs.items()}
+    if 'work_dir' not in irunner_kwarg_hydrated:
+        irunner_kwarg_hydrated['work_dir'] = os.getcwd()
 
     j = RUN.J
-    j.set_runner(Runner(**_, mounts=RUN.config.get('mounts', []), ))
+    j.set_runner(Runner(**irunner_kwarg_hydrated, mounts=RUN.config.get('mounts', []), ))
     j.runner.run(fn, *args, **kwargs)
 
     # config.HOST
@@ -552,10 +552,10 @@ def run(fn, *args, __run_config=None, **kwargs, ):
     kwargs.update(omit(launch_config, 'type'))
     kwargs['verbose'] = RUN.config.get('verbose')
 
-    _ = getattr(j, launch_config['type'])(**kwargs)
+    launch_response = getattr(j, launch_config['type'])(**kwargs)
     if RUN.config.get('verbose'):
-        cprint(f"launched! {_}", "green")
-    return _
+        cprint(f"launched! {launch_response}", "green")
+    return launch_response
 
 
 def listen(timeout=None):
