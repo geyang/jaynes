@@ -73,7 +73,11 @@ def hydrate(Constructor, ctx):
                     raise Exception(f"during comprehension of <{k}: {v}>: {str(e)}")
             else:
                 kwargs[k] = v
-        return Constructor(**kwargs)
+        try:
+            return Constructor(**kwargs)
+        except Exception as e:
+            print(f"{Constructor} and {kwargs} fails to instantiate")
+            raise e
 
     return _fn
 

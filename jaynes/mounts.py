@@ -234,7 +234,7 @@ class S3Output(Mount):
             note that the remote path is made absolute using the remote_cwd parameter
 
     :param name:
-    :param s3_prefix: Need slash at the end.
+    :param prefix: Need slash at the end.
     :param local_path: When None, do not download those files
     :param interval:
     :param pypath:
@@ -242,7 +242,7 @@ class S3Output(Mount):
     :return:
     """
 
-    def __init__(self, *, container_path, s3_prefix, host_path=None, name=None, local_path=None, interval=15,
+    def __init__(self, *, container_path, prefix, host_path=None, name=None, local_path=None, interval=15,
                  pypath=False, sync_s3=True):
 
         if host_path is None:
@@ -262,7 +262,7 @@ class S3Output(Mount):
             local_abs = os.path.join(RUN.config_root, local_path)
 
             download_script = f"""
-                aws s3 cp --recursive {s3_prefix} {local_path} || echo "s3 bucket is EMPTY" """
+                aws s3 cp --recursive {prefix} {local_path} || echo "s3 bucket is EMPTY" """
             self.local_script = f"""
                 mkdir -p {local_abs}
                 while true; do
@@ -274,7 +274,7 @@ class S3Output(Mount):
             print('S3UploadMount(**{}) generated no local_script.'.format(locals()))
             # pass
         self.upload_script = f"""
-                aws s3 cp --recursive {host_path} {s3_prefix} """  # --only-show-errors"""
+                aws s3 cp --recursive {host_path} {prefix} """  # --only-show-errors"""
         self.host_setup = f"""
                 echo 'making main_log directory {host_path}'
                 mkdir -p {host_path}
