@@ -1,13 +1,30 @@
 import os
 from os.path import join as pathJoin
 
-ec2_terminate = lambda region, delay=30: f"""
+ec2_tag_instance = lambda name: f"""
+        if [ `cat /sys/devices/virtual/dmi/id/bios_version` == 1.0 ] || [[ -f /sys/hypervisor/uuid && `head -c 3 /sys/hypervisor/uuid` == ec2 ]]; then
+            export REGION="$(wget -q -O - http://169.254.169.254/latest/meta-data/placement/region)"
+            EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
+            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=Name,Value={name}' --region $REGION
+        fi
+        """
+
+ec2_terminate = lambda delay=30: f"""
             {f"sleep {delay}" if delay else ""}
             die() {{ status=$1; shift; echo "FATAL: $*"; exit $status; }}
             echo "Now terminate this instance"
-            EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id || die "wget instance-id has failed: $?"`"
-            aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region {region}
-        """
+            export REGION="$(wget -q -O - http://169.254.169.254/latest/meta-data/placement/region)"
+            export EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id || die "wget instance-id has failed: $?"`"
+            aws ec2 terminate-instances --instance-ids $EC2_INSTANCE_ID --region $REGION
+            """
+
+gce_terminate = lambda delay=30: f"""
+            {f"sleep {delay}" if delay else ""}
+            echo "Now terminate this instance"
+            export NAME=$(curl -X GET http://metadata.google.internal/computeMetadata/v1/instance/name -H 'Metadata-Flavor: Google')
+            export ZONE=$(curl -X GET http://metadata.google.internal/computeMetadata/v1/instance/zone -H 'Metadata-Flavor: Google')
+            gcloud --quiet compute instances delete $NAME --zone=$ZONE
+            """
 
 
 def ssh_remote_exec(user, ip_address, script_path, port=None, pem=None,

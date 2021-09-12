@@ -11,7 +11,7 @@ from jaynes.client import JaynesClient
 from jaynes.helpers import cwd_ancestors, omit, hydrate, snake2camel
 from jaynes.runners import Docker, Simple
 from jaynes.shell import ck
-from jaynes.templates import ec2_terminate, ssh_remote_exec
+from jaynes.templates import gce_terminate, ec2_terminate, ec2_tag_instance, ssh_remote_exec
 
 
 class Jaynes:
@@ -114,8 +114,9 @@ class Jaynes:
                          launch_dir="~/jaynes-launch",
                          pipe_out=None,
                          setup=None, terminate_after=False,
-                         delay=None, ec2_name=None, region=None,
+                         delay=None, instance_name=None,
                          root_config=None,
+                         type=None,
                          **_):
         """
         function to make the host script
@@ -124,8 +125,7 @@ class Jaynes:
         :param sudo:
         :param terminate_after:
         :param delay:
-        :param ec2_name: less than 128 ascii characters
-        :param region:
+        :param instance_name: less than 128 ascii characters
         :return:
         """
         log_setup = dedent(f"""
@@ -145,22 +145,20 @@ class Jaynes:
         host_unpack_script = "" if self.host_unpacked else "\n".join(
             [m.host_setup for m in self.mounts if hasattr(m, "host_setup") and m.host_setup]
         )
-        if ec2_name:
-            assert len(ec2_name) <= 128, "Error: ws limits instance tag to 128 unicode characters."
+        if instance_name:
+            assert len(instance_name) <= 128, "Error: ws limits instance tag to 128 unicode characters."
 
-        if ec2_name:
-            assert region, "region need to be specified if instance tag is given."
-        if terminate_after:
-            assert region, "region need to be specified if instance is self-terminating."
-
-        tag_current_instance = f"""
-        if [ `cat /sys/devices/virtual/dmi/id/bios_version` == 1.0 ] || [[ -f /sys/hypervisor/uuid && `head -c 3 /sys/hypervisor/uuid` == ec2 ]]; then
-            EC2_INSTANCE_ID="`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`"
-            aws ec2 create-tags --resources $EC2_INSTANCE_ID --tags 'Key=Name,Value={ec2_name}' --region {region}
-        fi
-        """
         # NOTE: path.join is running on local computer, so it might not be quite right if remote is say windows.
         # NOTE: dedent is required by aws EC2.
+        terminate_commands = ""
+        if terminate_after:
+            if type == "ec2":
+                terminate_commands = ec2_terminate(delay)
+            elif type == "gce":
+                terminate_commands = gce_terminate(delay)
+            else:
+                raise NotImplementedError(f"terminate_after is not supported with {type}")
+
         self.launch_script = f"""
 #!/bin/bash
 # to allow process substitution
@@ -168,18 +166,19 @@ set +o posix
 {root_config or ''}
 {log_setup or ''}
 {{
-{setup or ""}
-{tag_current_instance if ec2_name else ""}
+            # launch.setup script
+            {setup or ""}
+{ec2_tag_instance(instance_name) if type == "ec2" and instance_name else ""}
 {host_unpack_script}
             # upload_script from within the host.
 {upload_script}
-            # setup script
+            # runner.setup script
 {self.runner.setup_script}
             # run script
 {self.runner.run_script}
             # post script
 {self.runner.post_script}
-{ec2_terminate(region, delay) if terminate_after else ""}
+{terminate_commands}
 }} {pipe_out or ""}
 """.strip()
         # }} > {log_path} 2> {error_path} &
@@ -269,7 +268,7 @@ set +o posix
         p.stdin.write(bytes(pipe_in, 'utf-8'))
         p.stdin.flush()
 
-    def launch_ec2(self, region, image_id, instance_type, key_name, security_group,
+    def launch_ec2(self, image_id, instance_type, key_name, security_group,
                    spot_price=None, iam_instance_profile_arn=None, verbose=False,
                    availability_zone=None,
                    dry=False, name=None, tags={}, **_):
@@ -277,12 +276,10 @@ set +o posix
         import boto3
         if verbose:
             print('Using the default AWS Profile')
-        ec2 = boto3.client("ec2", region_name=region)
 
         instance_config = dict(ImageId=image_id, KeyName=key_name, InstanceType=instance_type,
                                SecurityGroups=(security_group,),
-                               IamInstanceProfile=dict(Arn=iam_instance_profile_arn),
-                               )
+                               IamInstanceProfile={'Arn': iam_instance_profile_arn})
         if availability_zone:
             instance_config['Placement'] = dict(AvailabilityZone=availability_zone)
 
@@ -291,6 +288,7 @@ set +o posix
             tags["Name"] = name
         tag_str = [dict(Key=k, Value=v) for k, v in tags.items()]
 
+        ec2 = boto3.client("ec2")
         if spot_price:
             # for detailed settings see:
             #     http://boto3.readthedocs.io/en/latest/reference/services/ec2.html#EC2.Client.request_spot_instances
@@ -317,6 +315,88 @@ set +o posix
                 ec2.create_tags(DryRun=dry, Resources=[instance_id], Tags=tag_str)
             cprint(f'launched instance {instance_id}', 'green')
             return instance_id
+
+    def launch_gce(self, project_id, zone, instance_type, image_id=None,
+                   image_project='deeplearning-platform-release', image_family='pytorch-latest-gpu',
+                   accelerator_type=None, accelerator_count=None,
+                   preemptible=False,
+                   verbose=False, dry=False, name=None, tags={}, **_):
+        if verbose:
+            print('Using the default GCLoud Profile')
+
+        import googleapiclient.discovery
+
+        compute = googleapiclient.discovery.build('compute', 'v1')
+
+        if image_id is None:
+            image_response = compute.images().getFromFamily(project=image_project, family=image_family).execute()
+            image_id = image_response['selfLink']
+
+        instance_config = {
+            'name': name,
+            'machineType': f"zones/{zone}/machineTypes/{instance_type}",
+            'scheduling': {
+                'preemptable': preemptible,
+                # for accelerator enabled instances such as a2-highgpu-*, this needs to be set
+                "onHostMaintenance": "terminate",
+                "automaticRestart": False
+            },
+
+            # Specify the boot disk and the image to use as a source.
+            'disks': [
+                {
+                    'boot': True,
+                    'autoDelete': True,
+                    'initializeParams': {
+                        'sourceImage': image_id,
+                    }
+                }
+            ],
+
+            'automaticRestart': False,
+
+            # Specify a network interface with NAT to access the public
+            # internet.
+            'networkInterfaces': [{
+                'network': 'global/networks/default',
+                'accessConfigs': [
+                    {'type': 'ONE_TO_ONE_NAT', 'name': 'External NAT'}
+                ]
+            }],
+
+            # Allow the instance to access cloud storage and logging.
+            'serviceAccounts': [{
+                'email': 'default',
+                'scopes': [
+                    'https://www.googleapis.com/auth/devstorage.read_write',
+                    'https://www.googleapis.com/auth/logging.write',
+                    # for self-termination, full compute read and write
+                    'https://www.googleapis.com/auth/compute'
+                ]
+            }],
+
+            # Metadata is readable from the instance and allows you to
+            # pass configuration from deployment scripts to instances.
+            'metadata': {
+                'items': [
+                    dict(key='startup-script', value=self.launch_script),
+                    *(dict(key=k, value=v) for k, v in tags.items())
+                ]
+            },
+        }
+        if accelerator_type:
+            instance_config['accelerator'] = dict(type=accelerator_type, count=accelerator_count)
+
+        if dry:
+            return instance_config
+
+        # todo: there is a way to do this in batch mode that is a lot faster.
+        instances = compute.instances().insert(
+            project=project_id,
+            zone=zone,
+            body=instance_config
+        )
+        return instances.execute()
 
     def manager_host_setup(self, host, verbose=None, **_):
         self.host_unpacked = True
@@ -361,6 +441,7 @@ set +o posix
     local_docker = launch_local_docker
     ssh = launch_ssh
     ec2 = launch_ec2
+    gce = launch_gce
     manager = launch_manager
 
 
@@ -519,7 +600,8 @@ def run(fn, *args, __run_config=None, **kwargs, ):
                 print(f"{k} '{v}' context: {list(context.items())}")
                 raise e
         else:
-            irunner_kwarg_hydrated[k] = v  # _ = {k: v.format(**context) if type(v) is str else v for k, v in runner_kwargs.items()}
+            irunner_kwarg_hydrated[
+                k] = v  # _ = {k: v.format(**context) if type(v) is str else v for k, v in runner_kwargs.items()}
     if 'work_dir' not in irunner_kwarg_hydrated:
         irunner_kwarg_hydrated['work_dir'] = os.getcwd()
 
