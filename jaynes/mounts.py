@@ -60,7 +60,7 @@ class S3Code(Mount):
 
 
     :param local_path: path to the local directory. Doesn't have to be absolute.
-    :param s3_prefix: The s3 prefix including the s3: protocol, the bucket, and the path prefix.
+    :param prefix: The s3 prefix including the s3: protocol, the bucket, and the path prefix.
     :param host_path: The path on the remote instance. Default /tmp/{uuid4()}
     :param name: the name for the tar ball. Default to {uuid4()}
     :param container_path: The path for the docker instance. Can be something like /Users/ge/project-folder/blah
@@ -70,7 +70,7 @@ class S3Code(Mount):
     :return: self
     """
 
-    def __init__(self, *, s3_prefix, local_path, host_path=None,
+    def __init__(self, *, prefix, local_path, host_path=None,
                  remote_tar=None, container_path=None,
                  docker_mount_type="bind",
                  pypath=False, excludes=None, file_mask=None,
@@ -101,25 +101,25 @@ class S3Code(Mount):
                     mkdir -p {self.temp_dir}
                     # Do not use absolute path in tar.
                     tar {excludes} -c{"z" if compress else ""}f {local_tar} -C {local_abs} {file_mask}
-                    aws s3 cp {local_tar} {s3_prefix}/{tar_name} {'--acl {}'.format(acl) if acl else ''} {'--region {}'.format(region) if region else ''}
+                    aws s3 cp {local_tar} {prefix}/{tar_name} {'--acl {}'.format(acl) if acl else ''} {'--region {}'.format(region) if region else ''}
                     """
             remote_tar = remote_tar or f"/tmp/{tar_name}"
             self.host_path = host_path
             self.host_setup = f"""
-                    aws s3 cp {pathJoin(s3_prefix, tar_name)} {remote_tar} {'--no-sign-request' if no_signin else ''}
+                    aws s3 cp {pathJoin(prefix, tar_name)} {remote_tar} {'--no-sign-request' if no_signin else ''}
                     mkdir -p {host_path}
                     tar -{"z" if compress else ""}xf {remote_tar}{tar_name if remote_tar.endswith('/') else ""} -C {host_path}
                     """
         else:
             filename = os.path.basename(local_path)
             self.local_script = f"""
-                    aws s3 cp {local_path} {s3_prefix}/{filename} {'--acl {}'.format(acl) if acl else ''} {'--region {}'.format(region) if region else ''}
+                    aws s3 cp {local_path} {prefix}/{filename} {'--acl {}'.format(acl) if acl else ''} {'--region {}'.format(region) if region else ''}
                     """
             self.host_path = host_path
             host_dir = os.path.dirname(host_path)
             self.host_setup = f"""
                     mkdir -p {host_dir}
-                    aws s3 cp {s3_prefix}/{filename} {host_path} {'--no-sign-request' if no_signin else ''}
+                    aws s3 cp {prefix}/{filename} {host_path} {'--no-sign-request' if no_signin else ''}
                     """
 
         self.pypath = pypath
@@ -310,7 +310,6 @@ class SSHCode(Mount):
     :param profile: The profile to use for untaring the code ball. Not used.
     :param password: The password to use for untaring the code ball. Not used.
     :param local_path: path to the local directory. Doesn't have to be absolute.
-    :param s3_prefix: The s3 prefix including the s3: protocol, the bucket, and the path prefix.
     :param host_path: The path on the remote instance. Default /tmp/{uuid4()}
     :param name: the name for the tar ball. Default to {uuid4()}
     :param container_path: The path for the docker instance. Can be something like /Users/ge/project-folder/blah
