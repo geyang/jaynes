@@ -154,18 +154,23 @@ class Slurm(RunnerType):
             for i in range(n_seq_jobs):
                 sbatch_cmd += f"sbatch {option_str} {extra_options} -d singleton" \
                               f"<<<'#!/bin/bash\n{sbatch_options}\n{cmd}\n{entry_env} {entry_script}'"
-                if i == 0:
-                    # NOTE: store the "Submitted batch job xxx" message to $SUBMISSION,
-                    # and some shell magic to extract the last word that is jobid.
-                    # ref: https://stackoverflow.com/a/20021078/7057866
-                    sbatch_cmd = ' && '.join([f"SUBMISSION=$({sbatch_cmd})",
-                                              f"echo $SUBMISSION",
-                                              "JOBID=${SUBMISSION##* }",
-                                              f"LOGFILE={work_dir}/slurm-$JOBID.out",
-                                              "echo Logs are stored at $LOGFILE\n"])
-            # wait until the logfile is generated
-            wait_logic = f"while [ ! -f $LOGFILE ]; do sleep 1; done"
-            sbatch_cmd = f"{sbatch_cmd} {wait_logic} && tail -f $LOGFILE"
+
+            # Note: The tailing leave Ghost processes running on the login node, which eventually
+            #   max-outs the number of processes in the system. We remove this support because
+            #   real-time pipe-back is not necessary for non-interactive mode.
+            #
+            #     if i == 0:
+            #         # NOTE: store the "Submitted batch job xxx" message to $SUBMISSION,
+            #         # and some shell magic to extract the last word that is jobid.
+            #         # ref: https://stackoverflow.com/a/20021078/7057866
+            #         sbatch_cmd = ' && '.join([f"SUBMISSION=$({sbatch_cmd})",
+            #                                   f"echo $SUBMISSION",
+            #                                   "JOBID=${SUBMISSION##* }",
+            #                                   f"LOGFILE={work_dir}/slurm-$JOBID.out",
+            #                                   "echo Logs are stored at $LOGFILE\n"])
+            # # wait until the logfile is generated
+            # wait_logic = f"while [ ! -f $LOGFILE ]; do sleep 1; done"
+            # sbatch_cmd = f"{sbatch_cmd} {wait_logic} && tail -f $LOGFILE"
 
             self.run_script_thunk = f""" 
                 {setup_cmd} {envs if envs else ""} {sbatch_cmd} """
