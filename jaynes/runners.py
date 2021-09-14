@@ -83,7 +83,7 @@ class Slurm(RunnerType):
 
     def __init__(self, *, mounts=None, pypath="", setup="", startup=None, work_dir=None, envs=None,
                  n_gpu=None, shell="/bin/bash", entry_script="python -u -m jaynes.entry",
-                 partition=None, interactive=True, n_seq_jobs=None, time_limit: str = None, n_cpu=4, name=None,
+                 partition=None, interactive=True, n_seq_jobs=1, time_limit: str = None, n_cpu=4, name=None,
                  comment=None, label=False, args=None,
                  post_script="", **options):
         self.post_script = post_script
@@ -91,7 +91,7 @@ class Slurm(RunnerType):
         # --get-user-env
         setup_cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running on login-node `hostname`"\n"""
         setup_cmd += (setup.strip() + '\n') if setup else ''
-        setup_cmd += f"PYTHONPATH=$PYTHONPATH:{pypath} "
+        setup_cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath} "
 
         # some cluster only allows --gres=gpu:[1-]
         option_str = ""
@@ -133,7 +133,7 @@ class Slurm(RunnerType):
             cmd = ""
             srun_cmd = f"{entry_env} srun {option_str} {extra_options} {entry_script}"
 
-        if n_seq_jobs and n_seq_jobs >= 1:
+        if n_seq_jobs > 1:
             assert interactive is False, "interactive mode only supports non-sequential jobs."
 
         if interactive:
@@ -151,7 +151,7 @@ class Slurm(RunnerType):
             # sbatch_options = (f"--output {logfile}", f"--error {logfile}")
             # sbatch_options = "\n".join(["#SBATCH " + opt for opt in sbatch_options])
             sbatch_cmds = [setup_cmd]
-            for i in range(n_seq_jobs or 1):
+            for i in range(n_seq_jobs):
                 sbatch_cmds += [f"{envs if envs else ''} sbatch {option_str} {extra_options} -d singleton" \
                                 f"<<<'#!/bin/bash\n{cmd}\n{entry_env} {entry_script}'"]
 
