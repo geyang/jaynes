@@ -150,10 +150,10 @@ class Slurm(RunnerType):
             # logfile = f"{work_dir}/slurm-%j.out"
             # sbatch_options = (f"--output {logfile}", f"--error {logfile}")
             # sbatch_options = "\n".join(["#SBATCH " + opt for opt in sbatch_options])
-            sbatch_cmd = ""
-            for i in range(n_seq_jobs):
-                sbatch_cmd += f"sbatch {option_str} {extra_options} -d singleton" \
-                              f"<<<'#!/bin/bash\n{cmd}\n{entry_env} {entry_script}'"
+            sbatch_cmds = [setup_cmd]
+            for i in range(n_seq_jobs or 1):
+                sbatch_cmds += [f"{envs if envs else ''} sbatch {option_str} {extra_options} -d singleton" \
+                                f"<<<'#!/bin/bash\n{cmd}\n{entry_env} {entry_script}'"]
 
             # Note: The tailing leave Ghost processes running on the login node, which eventually
             #   max-outs the number of processes in the system. We remove this support because
@@ -172,8 +172,7 @@ class Slurm(RunnerType):
             # wait_logic = f"while [ ! -f $LOGFILE ]; do sleep 1; done"
             # sbatch_cmd = f"{sbatch_cmd} {wait_logic} && tail -f $LOGFILE"
 
-            self.run_script_thunk = f""" 
-                {setup_cmd} {envs if envs else ""} {sbatch_cmd} """
+            self.run_script_thunk = '\n'.join(sbatch_cmds)
 
     def run(self, fn, *args, **kwargs):
         encoded_thunk = serialize(fn, args, kwargs)
