@@ -91,7 +91,7 @@ class Slurm(RunnerType):
         # --get-user-env
         setup_cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running on login-node `hostname`"\n"""
         setup_cmd += (setup.strip() + '\n') if setup else ''
-        setup_cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath} "
+        setup_cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath}"
 
         # some cluster only allows --gres=gpu:[1-]
         option_str = ""
@@ -133,12 +133,13 @@ class Slurm(RunnerType):
             cmd = ""
             srun_cmd = f"{entry_env} srun {option_str} {extra_options} {entry_script}"
 
-        if n_seq_jobs > 1:
+        if n_seq_jobs is not None and n_seq_jobs > 1:
             assert interactive is False, "interactive mode only supports non-sequential jobs."
 
         if interactive:
             self.run_script_thunk = f"""
-                {setup_cmd} {envs if envs else ""} {srun_cmd}"""
+                {setup_cmd}
+                {envs if envs else ""} {srun_cmd}"""
         else:
             """
             use sbatch to submit a sequence of jobs.
@@ -151,7 +152,7 @@ class Slurm(RunnerType):
             # sbatch_options = (f"--output {logfile}", f"--error {logfile}")
             # sbatch_options = "\n".join(["#SBATCH " + opt for opt in sbatch_options])
             sbatch_cmds = [setup_cmd]
-            for i in range(n_seq_jobs):
+            for i in range(n_seq_jobs or 1):
                 sbatch_cmds += [f"{envs if envs else ''} sbatch {option_str} {extra_options} -d singleton" \
                                 f"<<<'#!/bin/bash\n{cmd}\n{entry_env} {entry_script}'"]
 
