@@ -67,8 +67,8 @@ class Slurm(RunnerType):
     :param entry_script: "python -u -m jaynes.entry"
     :param n_gpu:
     :param partition:
+    :param interactive: bool, uses :code:`srun` when True, :code:`sbatch` when False.
     :param n_seq_jobs: int, set a value > 1 if you run a sequence of jobs with :code:`sbatch`.
-    :param use_sbatch: bool, force to run a job with :code:`sbatch` regardless of the value of :code:`n_seq_jobs`
     :param time_limit:
     :param n_cpu:
     :param name:
@@ -83,7 +83,8 @@ class Slurm(RunnerType):
 
     def __init__(self, *, mounts=None, pypath="", setup="", startup=None, work_dir=None, envs=None,
                  n_gpu=None, shell="/bin/bash", entry_script="python -u -m jaynes.entry",
-                 partition=None, n_seq_jobs=1, use_sbatch=False, time_limit: str = None, n_cpu=4, name=None, comment=None, label=False, args=None,
+                 partition=None, interactive=True, n_seq_jobs=None, time_limit: str = None, n_cpu=4, name=None,
+                 comment=None, label=False, args=None,
                  post_script="", **options):
         self.post_script = post_script
         work_dir = work_dir or os.getcwd()
@@ -132,8 +133,13 @@ class Slurm(RunnerType):
             cmd = ""
             srun_cmd = f"{entry_env} srun {option_str} {extra_options} {entry_script}"
 
-        use_sbatch = use_sbatch or n_seq_jobs > 1
-        if use_sbatch:
+        if n_seq_jobs and n_seq_jobs >= 1:
+            assert interactive is False, "interactive mode only supports non-sequential jobs."
+
+        if interactive:
+            self.run_script_thunk = f"""
+                {setup_cmd} {envs if envs else ""} {srun_cmd}"""
+        else:
             """
             use sbatch to submit a sequence of jobs.
             sbatch job saves stdout/stderr to a log file, thus this script waits until the file
@@ -141,28 +147,28 @@ class Slurm(RunnerType):
             NOTE: It's quite hard to run `tail -f` on all the logfiles in the proper order,
             thus it is only applied to the first job.
             """
-            name = name or uuid4()
             logfile = f"{work_dir}/slurm-%j.out"
             sbatch_options = (f"--output {logfile}", f"--error {logfile}")
             sbatch_options = "\n".join(["#SBATCH " + opt for opt in sbatch_options])
             sbatch_cmd = ""
             for i in range(n_seq_jobs):
-                sbatch_cmd += f"sbatch {option_str} {extra_options} -J {name} -d singleton" \
-                    f"<<<'#!/bin/bash\n{sbatch_options}\n{cmd}\n{entry_env} {entry_script}'\n"
+                sbatch_cmd += f"sbatch {option_str} {extra_options} -d singleton" \
+                              f"<<<'#!/bin/bash\n{sbatch_options}\n{cmd}\n{entry_env} {entry_script}'"
                 if i == 0:
                     # NOTE: store the "Submitted batch job xxx" message to $SUBMISSION,
                     # and some shell magic to extract the last word that is jobid.
                     # ref: https://stackoverflow.com/a/20021078/7057866
-                    sbatch_cmd = f"SUBMISSION=$({sbatch_cmd}) && echo $SUBMISSION &&" \
-                        f"JOBID=${{{{SUBMISSION##* }}}} &&" \
-                        f"LOGFILE={work_dir}/slurm-$JOBID.out &&" \
-                        "echo Logs are stored at $LOGFILE\n"
+                    sbatch_cmd = ' && '.join([f"SUBMISSION=$({sbatch_cmd})",
+                                              f"echo $SUBMISSION",
+                                              "JOBID=${SUBMISSION##* }",
+                                              f"LOGFILE={work_dir}/slurm-$JOBID.out",
+                                              "echo Logs are stored at $LOGFILE\n"])
             # wait until the logfile is generated
             wait_logic = f"while [ ! -f $LOGFILE ]; do sleep 1; done"
             sbatch_cmd = f"{sbatch_cmd} {wait_logic} && tail -f $LOGFILE"
 
-        self.run_script_thunk = f""" 
-        {setup_cmd} {envs if envs else ""} {sbatch_cmd if use_sbatch else srun_cmd} """
+            self.run_script_thunk = f""" 
+                {setup_cmd} {envs if envs else ""} {sbatch_cmd} """
 
     def run(self, fn, *args, **kwargs):
         encoded_thunk = serialize(fn, args, kwargs)
