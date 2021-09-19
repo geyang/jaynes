@@ -125,9 +125,10 @@ class S3Code(Mount):
         self.pypath = pypath
         self.docker_mount = f"--mount type={docker_mount_type},source={host_path},target={self.container_path}"
 
-class GCPCode(Mount):
+
+class GCSCode(Mount):
     """
-    Tars a local folder, uploads the content to GCP Cloud Storage, downloads the tar ball
+    Tars a local folder, uploads the content to Google Cloud Storage (GCS), downloads the tar ball
     on the remote instance and mounts it in docker.
 
     To configure in the yaml file, you can do:
@@ -153,7 +154,7 @@ class GCPCode(Mount):
 
 
     :param local_path: path to the local directory. Doesn't have to be absolute.
-    :param s3_prefix: The s3 prefix including the s3: protocol, the bucket, and the path prefix.
+    :param prefix: The GCS prefix including the bucket name, and the path prefix. Does not include gcp://
     :param host_path: The path on the remote instance. Default /tmp/{uuid4()}
     :param name: the name for the tar ball. Default to {uuid4()}
     :param container_path: The path for the docker instance. Can be something like /Users/ge/project-folder/blah
@@ -167,7 +168,7 @@ class GCPCode(Mount):
                  remote_tar=None, container_path=None,
                  docker_mount_type="bind",
                  pypath=False, excludes=None, file_mask=None,
-                 name=None, compress=True, no_signin=False, acl=None, region=None):
+                 name=None, compress=True):
         # I fucking hate the behavior of python defaults. -- GY
         from .jaynes import RUN
         local_path = os.path.expandvars(local_path)
@@ -194,25 +195,25 @@ class GCPCode(Mount):
                     mkdir -p {self.temp_dir}
                     # Do not use absolute path in tar.
                     tar {excludes} -c{"z" if compress else ""}f {local_tar} -C {local_abs} {file_mask}
-                    gsutil cp {local_tar} {prefix}/{tar_name} {'--acl {}'.format(acl) if acl else ''} {'--region {}'.format(region) if region else ''}
+                    gsutil cp {local_tar} {prefix}/{tar_name}
                     """
             remote_tar = remote_tar or f"/tmp/{tar_name}"
             self.host_path = host_path
             self.host_setup = f"""
-                    gsutil cp {pathJoin(prefix, tar_name)} {remote_tar} {'--no-sign-request' if no_signin else ''}
+                    gsutil cp {pathJoin(prefix, tar_name)} {remote_tar}
                     mkdir -p {host_path}
                     tar -{"z" if compress else ""}xf {remote_tar}{tar_name if remote_tar.endswith('/') else ""} -C {host_path}
                     """
         else:
             filename = os.path.basename(local_path)
             self.local_script = f"""
-                    gsutil cp {local_path} {prefix}/{filename} {'--acl {}'.format(acl) if acl else ''} {'--region {}'.format(region) if region else ''}
+                    gsutil cp {local_path} {prefix}/{filename}
                     """
             self.host_path = host_path
             host_dir = os.path.dirname(host_path)
             self.host_setup = f"""
                     mkdir -p {host_dir}
-                    gsutil cp {prefix}/{filename} {host_path} {'--no-sign-request' if no_signin else ''}
+                    gsutil cp {prefix}/{filename} {host_path}
                     """
 
         self.pypath = pypath
