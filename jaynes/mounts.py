@@ -126,7 +126,7 @@ class S3Code(Mount):
         self.docker_mount = f"--mount type={docker_mount_type},source={host_path},target={self.container_path}"
 
 
-class GCSCode(Mount):
+class GSCode(Mount):
     """
     Tars a local folder, uploads the content to Google Cloud Storage (GCS), downloads the tar ball
     on the remote instance and mounts it in docker.
