@@ -402,7 +402,11 @@ class Docker(RunnerType):
             echo -ne 'kill running instances '
             {docker_cmd} kill {docker_container_name}
             echo -ne 'remove existing container '
-            {envs if envs else ""} {docker_cmd} rm {docker_container_name}""" if docker_container_name else ""
+            {docker_cmd} rm {docker_container_name}""" if docker_container_name else ""
+
+        config = ""
+        for env_string in envs.split(' '):
+            config += f"--env {env_string} "
 
         if workdir:
             options['workdir'] = workdir
@@ -410,10 +414,12 @@ class Docker(RunnerType):
             options['net'] = net
         if ipc:
             options['ipc'] = ipc
+
         rest_config = " ".join(f"--{k.replace('_', '-')}={v}" for k, v in options.items())
+
         test_gpu = f"""
                 echo 'Testing nvidia-smi inside docker'
-                {envs if envs else ""} {docker_cmd} run --rm {rest_config} {image} nvidia-smi
+                {docker_cmd} run --rm {image} nvidia-smi
                 """
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""
@@ -421,7 +427,7 @@ class Docker(RunnerType):
             {remove_by_name if name else ""}
             {test_gpu if is_gpu else ""}
             echo 'Now run docker'
-            {envs if envs else ""} {docker_cmd} run -i{"t" if tty else ""} {rest_config} {mount_string} --name '{docker_container_name}' \\
+            {docker_cmd} run -i{"t" if tty else ""} {config} {rest_config} {mount_string} --name '{docker_container_name}' \\
             {image} /bin/bash -c '{cmd}'
             """
 

@@ -149,7 +149,7 @@ if __name__ == '__main__':
         For more information, see the README.md under /compute.
         """
         project_id = Proto(env="JYNS_GCE_PROJECT", help='Your Google Cloud project ID.')
-        bucket_name = Proto(env="USER_GCE_BUCKET", help='Your Google Cloud Storage bucket name.')
+        bucket_name = Proto(env="USER_GS_BUCKET", help='Your Google Cloud Storage bucket name.')
         machine_type = Proto("n1-standard-1", help="availability depends on region.")
         zone = Proto('us-central1-f', help='Compute Engine zone to deploy to.')
         instance_name = Proto('demo-instance', help='New instance name.')
