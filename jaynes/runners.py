@@ -419,7 +419,7 @@ class Docker(RunnerType):
 
         test_gpu = f"""
                 echo 'Testing nvidia-smi inside docker'
-                {docker_cmd} run --rm {image} nvidia-smi
+                {docker_cmd} run --rm {rest_config} {image} nvidia-smi
                 """
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""
