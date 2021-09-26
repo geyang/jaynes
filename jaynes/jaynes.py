@@ -270,7 +270,7 @@ set +o posix
 
     def launch_ec2(self, image_id, instance_type, key_name, security_group,
                    spot_price=None, iam_instance_profile_arn=None, verbose=False,
-                   availability_zone=None,
+                   region=None, availability_zone=None,
                    dry=False, name=None, tags={}, **_):
         from termcolor import cprint
         import boto3
@@ -288,12 +288,15 @@ set +o posix
             tags["Name"] = name
         tag_str = [dict(Key=k, Value=v) for k, v in tags.items()]
 
-        ec2 = boto3.client("ec2")
+        # note: region needs to agree with availability_zone.
+        ec2 = boto3.client("ec2", region_name=region)
         if spot_price:
             # for detailed settings see:
             #     http://boto3.readthedocs.io/en/latest/reference/services/ec2.html#EC2.Client.request_spot_instances
             # issue here: https://github.com/boto/boto3/issues/368
             instance_config.update(UserData=base64.b64encode(self.launch_script.encode()).decode("utf-8"))
+            if verbose:
+                print(instance_config)
             response = ec2.request_spot_instances(
                 InstanceCount=1, LaunchSpecification=instance_config,
                 SpotPrice=str(spot_price), DryRun=dry)
@@ -307,6 +310,8 @@ set +o posix
             return spot_request_id
         else:
             instance_config.update(UserData=self.launch_script)
+            if verbose:
+                print(instance_config)
             response = ec2.run_instances(MaxCount=1, MinCount=1, **instance_config, DryRun=dry)
             instance_id = response['Instances'][0]['InstanceId']
             if verbose:
