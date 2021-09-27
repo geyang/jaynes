@@ -423,7 +423,6 @@ class Docker(RunnerType):
                 """
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""
-            {indent(self.setup_script, " " * 12).strip()}
             {remove_by_name if name else ""}
             {test_gpu if is_gpu else ""}
             echo 'Now run docker'

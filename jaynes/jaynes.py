@@ -324,7 +324,7 @@ set +o posix
     def launch_gce(self, project_id, zone, instance_type, image_id=None,
                    image_project='deeplearning-platform-release', image_family='pytorch-latest-gpu',
                    accelerator_type=None, accelerator_count=None,
-                   preemptible=False,
+                   preemptible=False, boot_size=60,
                    verbose=False, dry=False, name=None, tags={}, **_):
         if verbose:
             print('Using the default GCLoud Profile')
@@ -340,11 +340,12 @@ set +o posix
         instance_config = {
             'name': name,
             'machineType': f"zones/{zone}/machineTypes/{instance_type}",
+            # 'preemptible': preemptible,
             'scheduling': {
-                'preemptable': preemptible,
+                'preemptible': preemptible,
                 # for accelerator enabled instances such as a2-highgpu-*, this needs to be set
-                "onHostMaintenance": "terminate",
-                "automaticRestart": False
+                'onHostMaintenance': 'TERMINATE',
+                'automaticRestart': False,
             },
 
             # Specify the boot disk and the image to use as a source.
@@ -354,11 +355,10 @@ set +o posix
                     'autoDelete': True,
                     'initializeParams': {
                         'sourceImage': image_id,
+                        'diskSizeGb': boot_size
                     }
                 }
             ],
-
-            'automaticRestart': False,
 
             # Specify a network interface with NAT to access the public
             # internet.
@@ -385,12 +385,20 @@ set +o posix
             'metadata': {
                 'items': [
                     dict(key='startup-script', value=self.launch_script),
-                    *(dict(key=k, value=v) for k, v in tags.items())
+                    # Cast True to 'True'. Tag values are string types.
+                    *(dict(key=k, value=str(v)) for k, v in tags.items())
                 ]
             },
         }
+        # todo: need to add option for multiple
         if accelerator_type:
-            instance_config['accelerator'] = dict(type=accelerator_type, count=accelerator_count)
+            instance_config['guestAccelerators'] = [{
+                'acceleratorType': f"projects/{project_id}/zones/{zone}/acceleratorTypes/{accelerator_type}",
+                'acceleratorCount': accelerator_count
+            }]
+
+        if verbose:
+            print(instance_config)
 
         if dry:
             return instance_config
