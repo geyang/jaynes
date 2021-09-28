@@ -409,7 +409,7 @@ set +o posix
             zone=zone,
             body=instance_config
         )
-        return instances.execute()
+        return instances.execute()['id']
 
     def manager_host_setup(self, host, verbose=None, **_):
         self.host_unpacked = True
