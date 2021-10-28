@@ -120,7 +120,7 @@ to switch between them during development.
        startup: yes | pip install jaynes ml-logger -q
        envs: "LANG=utf-8"
        pypath: "{mounts[0].container_path}"
-       launch_directory: "{mounts[0].container_path}"
+       workdir: "{mounts[0].container_path}"
        ipc: host
        use_gpu: false
    modes: # todo: add support to modes.
