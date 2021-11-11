@@ -1,5 +1,6 @@
 import base64
 import glob
+from uuid import uuid4
 import os
 import sys
 import tempfile
@@ -325,7 +326,7 @@ set +o posix
                    image_project='deeplearning-platform-release', image_family='pytorch-latest-gpu',
                    accelerator_type=None, accelerator_count=None,
                    preemptible=False, boot_size=60,
-                   verbose=False, dry=False, name=None, tags={}, **_):
+                   verbose=False, dry=False, name=f"jaynes-job-{uuid4()}", tags={}, **_):
         if verbose:
             print('Using the default GCLoud Profile')
 
@@ -337,8 +338,11 @@ set +o posix
             image_response = compute.images().getFromFamily(project=image_project, family=image_family).execute()
             image_id = image_response['selfLink']
 
+        import re
+        normalized_name = re.sub('([^a-z0-9]+)', ' ', name.lower()).strip().replace(' ', '-')
         instance_config = {
-            'name': name,
+            # todo: use regex to replace all non- [a-z0-9] chars with '-'
+            'name': normalized_name[:63],
             'machineType': f"zones/{zone}/machineTypes/{instance_type}",
             # 'preemptible': preemptible,
             'scheduling': {
@@ -503,7 +507,6 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
     from termcolor import cprint
     from . import mounts, runners
     from datetime import datetime
-    from uuid import uuid4
 
     # RUN.reset()  # do not reset the clock
     RUN.mode = mode
@@ -579,7 +582,6 @@ def config(mode=None, *, config_path=None, runner=None, host=None, launch=None, 
 def run(fn, *args, __run_config=None, **kwargs, ):
     from termcolor import cprint
     from datetime import datetime
-    from uuid import uuid4
 
     if not RUN.J:
         config()

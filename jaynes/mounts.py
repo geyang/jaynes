@@ -173,6 +173,8 @@ class GSCode(Mount):
         from .jaynes import RUN
         local_path = os.path.expandvars(local_path)
         local_abs = os.path.join(RUN.config_root, local_path)
+
+        name = name or uuid4()
         if not host_path:
             host_path = f"/tmp/{name}"
         if container_path:
@@ -185,7 +187,6 @@ class GSCode(Mount):
             file_mask = file_mask or "."  # file_mask can Not be None or "".
             excludes = excludes or "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'"
 
-            name = name or uuid4()
             tar_name = f"{name}.tar"
             self.temp_dir = get_temp_dir()
             local_tar = pathJoin(self.temp_dir, tar_name)
