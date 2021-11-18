@@ -342,7 +342,7 @@ set +o posix
         normalized_name = re.sub('([^a-z0-9]+)', ' ', name.lower()).strip().replace(' ', '-')
         instance_config = {
             # todo: use regex to replace all non- [a-z0-9] chars with '-'
-            'name': normalized_name[:63],
+            'name': normalized_name[-63:],
             'machineType': f"zones/{zone}/machineTypes/{instance_type}",
             # 'preemptible': preemptible,
             'scheduling': {
