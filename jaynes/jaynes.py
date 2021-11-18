@@ -650,8 +650,9 @@ def run(fn, *args, __run_config=None, **kwargs, ):
     kwargs['verbose'] = RUN.config.get('verbose')
 
     launch_response = getattr(j, launch_config['type'])(**kwargs)
-    if RUN.config.get('verbose'):
-        cprint(f"launched! {launch_response}", "green")
+    # if RUN.config.get('verbose'):
+    if launch_response:
+        cprint(f"launched {launch_response}", "green")
     return launch_response
 
 
