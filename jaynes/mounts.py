@@ -74,11 +74,20 @@ class S3Code(Mount):
                  remote_tar=None, container_path=None,
                  docker_mount_type="bind",
                  pypath=False, excludes=None, file_mask=None,
-                 name=None, compress=True, no_signin=False, acl=None, region=None):
+                 name=None, compress=True, no_signin=False, acl=None, region=None,
+                 exclude_vcs=True, exclude_from=None, **tar_options):
         # I fucking hate the behavior of python defaults. -- GY
         from .jaynes import RUN
         local_path = os.path.expandvars(local_path)
         local_abs = os.path.join(RUN.config_root, local_path)
+
+        tar_options = ' '.join([f"--{key.replace('_', '-')}={value}" for key, value in tar_options.items()])
+        if exclude_vcs:
+            tar_options += " --exclude-vcs"
+        if exclude_from:
+            ignore_file_path = os.path.join(RUN.config_root, exclude_from)
+            tar_options += f" --exclude-from='{ignore_file_path}'"
+
         if not host_path:
             host_path = f"/tmp/{name}"
         if container_path:
@@ -100,7 +109,7 @@ class S3Code(Mount):
                     type gtar >/dev/null 2>&1 && alias tar=`which gtar`
                     mkdir -p {self.temp_dir}
                     # Do not use absolute path in tar.
-                    tar {excludes} -c{"z" if compress else ""}f {local_tar} -C {local_abs} {file_mask}
+                    tar {excludes} {tar_options} -c{"z" if compress else ""}f {local_tar} -C {local_abs} {file_mask}
                     aws s3 cp {local_tar} {prefix}/{tar_name} {'--acl {}'.format(acl) if acl else ''} {'--region {}'.format(region) if region else ''}
                     """
             remote_tar = remote_tar or f"/tmp/{tar_name}"
@@ -168,11 +177,18 @@ class GSCode(Mount):
                  remote_tar=None, container_path=None,
                  docker_mount_type="bind",
                  pypath=False, excludes=None, file_mask=None,
-                 name=None, compress=True):
+                 name=None, compress=True, exclude_vcs=True, exclude_from=None, **tar_options):
         # I fucking hate the behavior of python defaults. -- GY
         from .jaynes import RUN
         local_path = os.path.expandvars(local_path)
         local_abs = os.path.join(RUN.config_root, local_path)
+
+        tar_options = ' '.join([f"--{key.replace('_', '-')}={value}" for key, value in tar_options.items()])
+        if exclude_vcs:
+            tar_options += " --exclude-vcs"
+        if exclude_from:
+            ignore_file_path = os.path.join(RUN.config_root, exclude_from)
+            tar_options += f" --exclude-from='{ignore_file_path}'"
 
         name = name or uuid4()
         if not host_path:
@@ -182,6 +198,7 @@ class GSCode(Mount):
             self.container_path = os.path.abspath(container_path)
         else:
             self.container_path = local_abs
+
 
         if os.path.isdir(local_path):
             file_mask = file_mask or "."  # file_mask can Not be None or "".
@@ -195,7 +212,7 @@ class GSCode(Mount):
                     type gtar >/dev/null 2>&1 && alias tar=`which gtar`
                     mkdir -p {self.temp_dir}
                     # Do not use absolute path in tar.
-                    tar {excludes} -c{"z" if compress else ""}f {local_tar} -C {local_abs} {file_mask}
+                    tar {excludes} {tar_options} -c{"z" if compress else ""}f {local_tar} -C {local_abs} {file_mask}
                     gsutil cp {local_tar} {prefix}/{tar_name}
                     """
             remote_tar = remote_tar or f"/tmp/{tar_name}"
@@ -323,7 +340,7 @@ class SSHCode(Mount):
 
     def __init__(self, *, local_path, local_tar=None, host_path=None, remote_tar=None,
                  container_path=None, pypath=False, excludes=None, file_mask=None, name=None,
-                 compress=True):
+                 compress=True, exclude_vcs=True, exclude_from=None, **tar_options):
 
         # I fucking hate the behavior of python defaults. -- GY
         self.local_path = local_path
@@ -333,6 +350,7 @@ class SSHCode(Mount):
         self.name = name
         self.compress = compress
 
+
         self.excludes = excludes or "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'"
         self.file_mask = file_mask or "."  # file_mask can Not be None or "".
 
@@ -340,6 +358,13 @@ class SSHCode(Mount):
         local_path = os.path.expandvars(local_path)
         local_abs = os.path.join(RUN.config_root, local_path)
         self.container_path = os.path.join(RUN.config_root, container_path) if container_path else local_abs
+
+        tar_options = ' '.join([f"--{key.replace('_', '-')}={value}" for key, value in tar_options.items()])
+        if exclude_vcs:
+            tar_options += " --exclude-vcs"
+        if exclude_from:
+            ignore_file_path = os.path.join(RUN.config_root, exclude_from)
+            tar_options += f" --exclude-from='{ignore_file_path}'"
 
         if local_tar is None:
             name = name or uuid4()
@@ -357,7 +382,7 @@ class SSHCode(Mount):
                 type gtar >/dev/null 2>&1 && alias tar=`which gtar`
                 mkdir -p {self.temp_dir}
                 # Do not use absolute path in tar.
-                tar {self.excludes} -c{"z" if self.compress else ""}f {self.local_tar} -C {local_abs} {self.file_mask}
+                tar {self.excludes} {tar_options} -c{"z" if self.compress else ""}f {self.local_tar} -C {local_abs} {self.file_mask}
                 """
 
         self.host_setup = f"""
@@ -396,7 +421,7 @@ class TarMount(Mount):
 
     def __init__(self, *_, local_path, local_tar=None, remote_tar=None, host_path=None,
                  container_path=None, pypath=False, name=None, excludes=None, file_mask=None,
-                 compress=True):
+                 compress=True, exclude_vcs=True, exclude_from=None, **tar_options):
         self.local_path = local_path
         self.host_path = host_path
         self.container_path = container_path or host_path
@@ -410,6 +435,13 @@ class TarMount(Mount):
         from .jaynes import RUN
         local_path = os.path.expandvars(local_path)
         local_abs = os.path.join(RUN.config_root, local_path)
+
+        tar_options = ' '.join([f"--{key.replace('_', '-')}={value}" for key, value in tar_options.items()])
+        if exclude_vcs:
+            tar_options += " --exclude-vcs"
+        if exclude_from:
+            ignore_file_path = os.path.join(RUN.config_root, exclude_from)
+            tar_options += f" --exclude-from='{ignore_file_path}'"
 
         if local_tar is None:
             name = name or uuid4()
@@ -427,7 +459,7 @@ class TarMount(Mount):
                 type gtar >/dev/null 2>&1 && alias tar=`which gtar`
                 mkdir -p {self.temp_dir}
                 # Do not use absolute path in tar.
-                tar {self.excludes} -c{"z" if compress else ""}f {self.local_tar} -C {local_abs} {self.file_mask}
+                tar {self.excludes} {tar_options} -c{"z" if compress else ""}f {self.local_tar} -C {local_abs} {self.file_mask}
                 """
         self.host_setup = f"""
                 mkdir -p {host_path}
