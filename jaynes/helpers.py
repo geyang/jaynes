@@ -61,6 +61,18 @@ def n_to_m(yaml_node):
     return {k.value: v.value for k, v in yaml_node.value}
 
 
+def memoize(f):
+    memo = {}
+
+    def wrapper(*args, **kwargs):
+        key = (*args, *kwargs.keys(), *kwargs.values())
+        if key not in memo:
+            memo[key] = f(*args, **kwargs)
+        return memo[key]
+
+    return wrapper
+
+
 # note: now we properly handle the node types.
 def hydrate(Constructor, ctx):
     def _fn(_, node):
