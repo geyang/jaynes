@@ -1,6 +1,8 @@
 import os
+from datetime import datetime
 from uuid import uuid4
 
+import jaynes
 from .constants import JAYNES_PARAMS_KEY
 from .param_codec import serialize
 
@@ -27,7 +29,11 @@ class Runner:
 
     def __init__(self, mounts, work_dir=None, pypath=None, startup=None, entry_script="python -u -m jaynes.entry",
                  post_script="", **_):
-        self.mounts = mounts or self.mounts
+
+        # mounts can be an empty list []
+        if mounts is not None:
+            self.mounts = mounts
+
         self.work_dir = work_dir
         self.pypath = pypath
         self.startup = startup
@@ -362,7 +368,8 @@ class Docker(Runner):
 
         is_gpu = options.get('gpus', None) or "nvidia" in docker_cmd
 
-        docker_container_name = name or uuid4()
+        # dynamically generate the job name to avoid conflict
+        docker_container_name = name or f"jaynes-job-{datetime.utcnow():%H%M%S}-{jaynes.RUN.count}"
 
         remove_by_name = f"""
 echo -ne 'kill running instances '

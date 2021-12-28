@@ -37,6 +37,7 @@ class RUN:
 
 
 class Jaynes:
+    verbose = None
     mounts = []
     launcher = None
     runner_config = None
@@ -101,7 +102,7 @@ class Jaynes:
                 mount.upload(verbose=verbose, **host)
 
     @classmethod
-    def config(cls, mode=None, *, config_path=None, runner=None, host=None, launch=None, **ext):
+    def config(cls, mode=None, *, config_path=None, runner=None, host=None, launch=None, verbose=None, **ext):
         """
         Configuration function for Jaynes
 
@@ -136,6 +137,11 @@ class Jaynes:
             modes = config.get('modes', {})
             config.update(modes[mode])
 
+        if verbose is not None:
+            cls.verbose = verbose
+        elif cls.verbose is None:
+            cls.verbose = config.get('verbose', None)
+
         if cls.runner_config is None:
             cls.runner_config = config['runner']
         if runner:
@@ -155,7 +161,6 @@ class Jaynes:
             cls.launcher = getattr(jaynes.launchers, launch_type)(**launch_config)
 
             cls.mounts = config.get('mounts', [])
-            cls.verbose = config.get('verbose', None)
 
             cls.upload_mount(**launch_config, mounts=cls.mounts, verbose=cls.verbose)
         else:
@@ -243,11 +248,6 @@ class Jaynes:
             cls.launcher.last_runner.chain(fn, *args, **kwargs)
 
         return cls
-
-    @property
-    @classmethod
-    def verbose(J):
-        return J._raw_config.get('verbose', None)
 
     @classmethod
     def launch_instance(cls, verbose=None):

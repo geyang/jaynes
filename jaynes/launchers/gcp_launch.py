@@ -174,6 +174,7 @@ class GCE(Launcher):
 
     def execute(self, verbose=None):
         if self._gce_batch_request is None:
-            self.launch_instance(verbose=verbose)
+            return self.launch_instance(verbose=verbose)
         self.plan_instance(verbose=verbose)
+        # todo: needs to return a list of request_ids.
         self.gce_batch_request.execute(verbose=verbose)

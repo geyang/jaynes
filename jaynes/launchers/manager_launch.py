@@ -30,12 +30,12 @@ class Manager(Launcher):
             print(self.launch_script)
 
     def execute(self, verbose=None):
-        launch_manager(self.launch_script, **self.config)
+        return launch_manager(self.launch_script, **self.config)
 
 
 def launch_manager(launch_script, host, launch_dir, script_name="jaynes_launch.sh", project=None, user=None,
                    token=None, sudo=False, cleanup=True, verbose=False, timeout=None, **_):
-    from termcolor import cprint
+    # from termcolor import cprint
 
     tf = tempfile.NamedTemporaryFile(prefix="jaynes_launcher-", suffix=".sh", delete=False)
     with open(tf.name, 'w') as f:
@@ -50,12 +50,13 @@ def launch_manager(launch_script, host, launch_dir, script_name="jaynes_launch.s
     if verbose:
         print(launch_script)
 
-    r = client.execute(f"bash {remote_script_name}", timeout)
-    try:
-        stdout, stderr, error = r
-        if stdout:
-            print(stdout)
-        if error or stderr:
-            cprint(stderr, color="red")
-    except Exception as e:
-        cprint(r, color="red")
+    return client.execute(f"bash {remote_script_name}", timeout)
+    # try:
+    #     stdout, stderr, error = r
+    #     if stdout:
+    #         print(stdout)
+    #     if error or stderr:
+    #         cprint(stderr, color="red")
+    # except Exception as e:
+    #     cprint(r, color="red")
+    # return r

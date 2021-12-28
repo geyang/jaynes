@@ -5,7 +5,7 @@ from textwrap import dedent
 
 from jaynes.helpers import omit
 from jaynes.launchers.base_launcher import Launcher, make_host_unpack_script, make_launch_script
-from jaynes.shell import ck
+from jaynes.shell import check_call
 from jaynes.templates import ssh_remote_exec
 
 
@@ -64,7 +64,7 @@ def ssh(script, ip, port=None, username="ubuntu", pem=None, profile=None,
     # note: first pre-upload the script
     if prelaunch_upload_script:
         # done: separate out the two commands
-        p = ck(prelaunch_upload_script, verbose=verbose, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+        p = check_call(prelaunch_upload_script, verbose=verbose, shell=True, stdout=sys.stdout, stderr=sys.stderr)
         if profile is not None:
             p.communicate(bytes(f"{password}\n"))
 
@@ -119,4 +119,4 @@ class SSH(Launcher):
         if verbose:
             print(self.launch_script)
 
-        ssh(self.launch_script, **self.config)
+        return ssh(self.launch_script, **self.config)

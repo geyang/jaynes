@@ -3,7 +3,7 @@ from os.path import join as pathJoin
 from textwrap import dedent
 from uuid import uuid4
 
-from jaynes.shell import ck
+from jaynes.shell import check_call
 from .helpers import get_temp_dir
 
 
@@ -13,7 +13,7 @@ class Mount:
     def upload(self, verbose=None, **_):
         if self.local_script is None:
             return
-        assert not ck(dedent(self.local_script or ""), verbose=verbose, shell=True)
+        assert not check_call(dedent(self.local_script or ""), verbose=verbose, shell=True)
 
 
 class Host(Mount):
@@ -473,7 +473,7 @@ class TarMount(Mount):
             print('local tar already exists', self.local_tar)
         else:
             script = dedent(self.local_script)
-            ck(script, verbose=verbose, shell=True)
+            check_call(script, verbose=verbose, shell=True)
 
         parent_dir = os.path.dirname(self.remote_tar)
         tar_name = os.path.basename(self.remote_tar)
