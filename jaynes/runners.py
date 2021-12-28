@@ -44,7 +44,7 @@ class Runner:
     def main_script_thunk(self):
         entry_env = f"{JAYNES_PARAMS_KEY}={{JYNS_encoded_thunk}}"
 
-        cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker `hostname`";"""
+        cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker `hostname`" 1>&2;"""
         if self.startup:
             cmd += inline(self.startup)
         if self.work_dir:
@@ -59,7 +59,7 @@ class Runner:
         self.run_script = self.run_script_thunk.format(JYNS_main_script=self.main_script)
         return self
 
-    def chain(self, fn, *args, __sep="&\n", **kwargs):
+    def chain(self, fn, *args, __sep=" &\n", **kwargs):
         encoded_thunk = serialize(fn, args, kwargs)
         self.main_script += __sep + self.main_script_thunk.format(JYNS_encoded_thunk=encoded_thunk)
         self.run_script = self.run_script_thunk.format(JYNS_main_script=self.main_script)
@@ -403,7 +403,7 @@ echo 'Now run docker'
 {image} /bin/bash -c '{{JYNS_main_script}}' """
 
     chain = None
-    # def chain(self, fn, *args, __sep="&\n", **kwargs):
+    # def chain(self, fn, *args, __sep=" &\n", **kwargs):
     #     encoded_thunk = serialize(fn, args, kwargs)
     #     self.main_script = self.main_script_thunk.format(JYNS_encoded_thunk=encoded_thunk)
     #     self.run_script += __sep + self.run_script_thunk.format(JYNS_main_script=self.main_script).strip()

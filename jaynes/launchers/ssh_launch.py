@@ -116,6 +116,7 @@ class SSH(Launcher):
     def execute(self, verbose=None):
         self.launch_script = make_launch_script(runners=self.runners, mounts=self.all_mounts,
                                                 unpack_on_host=self.host_unpacked, **self.config)
+        self.runners.clear()
         if verbose:
             print(self.launch_script)
 
