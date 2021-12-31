@@ -27,7 +27,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         "aiofile",
-        "cloundpickle==1.3.0",
+        "cloudpickle==1.3.0",
         "functional_notations",
         "params-proto"
     ]
