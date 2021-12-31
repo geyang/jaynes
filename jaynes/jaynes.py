@@ -117,25 +117,24 @@ class Jaynes:
         """
         from termcolor import cprint
 
-        cls.mode = mode
         cprint(f"Launching {mode or '<default>'} mode", color="blue")
 
         ctx = cls.format_context(**ext)
 
         config = cls.raw_config(config_path, ctx).copy()
 
+        # saving so that ml-logger can use this
+        cls.mode = mode
         if mode == 'local':
             cprint("running local mode", "green")
             return
-
-        elif not mode:
+        elif mode:
+            modes = config.get('modes', {})
+            config.update(modes[mode])
+        else:
             run = config.get('run')
             assert run, "`run` field in .jaynes.yml can not be empty when using default config"
             config.update(run)
-
-        else:
-            modes = config.get('modes', {})
-            config.update(modes[mode])
 
         if verbose is not None:
             cls.verbose = verbose
