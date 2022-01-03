@@ -261,7 +261,7 @@ class Jaynes:
 
     @classmethod
     def run(J, fn, *args, **kwargs, ):
-        if RUN.mode == "local":
+        if J.mode == "local":
             return fn(*args, **kwargs)
 
         J.add(fn, *args, **kwargs)
