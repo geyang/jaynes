@@ -138,7 +138,8 @@ def make_launch_script(runners: Tuple[Runner],
             raise NotImplementedError(f"terminate_after is not supported with {type}")
 
     setup_scripts = "\n".join([r.setup_script for r in runners])
-    run_scripts = "& \n".join([r.run_script for r in runners])
+    # note: add wait at the end to terminate process only after all launch scripts finish. Always blocking
+    run_scripts = "& \n".join([r.run_script for r in runners] + ["wait"])
     post_scripts = "\n".join([r.post_script for r in runners])
 
     return f"""

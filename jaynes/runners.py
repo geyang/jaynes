@@ -159,7 +159,7 @@ class Slurm(Runner):
             extra_options = "".join([f"--{a} " for a in args]) + extra_options
 
         if interactive:
-            srun_cmd = f"srun {option_str} {extra_options} {shell} -c '{{JYNS_main_script}}'"
+            srun_cmd = f"srun {option_str} {extra_options} {shell} -c '{{JYNS_main_script}} & wait'"
             if n_seq_jobs is not None and n_seq_jobs > 1:
                 assert interactive is False, "interactive mode only supports non-sequential jobs."
             self.run_script_thunk = f"""
@@ -179,7 +179,7 @@ class Slurm(Runner):
             sbatch_cmds = [setup_cmd]
             for i in range(n_seq_jobs or 1):
                 sbatch_cmds += [f"{envs if envs else ''} sbatch {option_str} {extra_options} -d singleton"
-                                f"<<<'#!/bin/bash\n{{JYNS_main_script}}'"]
+                                f"<<<'#!/bin/bash\n{{JYNS_main_script}} & wait'"]
 
             # Note: The tailing leave Ghost processes running on the login node, which eventually
             #   max-outs the number of processes in the system. We remove this support because
@@ -249,7 +249,7 @@ class SlurmManager(Runner):
         """
         slurm_cmd = f"srun {gres} --partition={partition} --time={time_limit} " \
                     f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
-                    f"--comment='{comment}' {extra_options} /bin/bash -l -c '{{JYNS_main_script}}'"
+                    f"--comment='{comment}' {extra_options} /bin/bash -l -c '{{JYNS_main_script}} & wait'"
 
         self.run_script_thunk = f""" 
         {setup_cmd} {envs if envs else ""} {slurm_cmd} """
@@ -400,7 +400,7 @@ echo -ne 'remove existing container '
 {test_gpu if is_gpu else ""}
 echo 'Now run docker'
 {docker_cmd} run -i{"t" if tty else ""} {config} {rest_config} {mount_string} --name '{docker_container_name}' \\
-{image} /bin/bash -c '{{JYNS_main_script}}' """
+{image} /bin/bash -c '{{JYNS_main_script}} & wait' """
 
     chain = None
     # def chain(self, fn, *args, __sep=" &\n", **kwargs):
