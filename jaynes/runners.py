@@ -1,6 +1,5 @@
 import os
 from datetime import datetime
-from uuid import uuid4
 
 import jaynes
 from .constants import JAYNES_PARAMS_KEY
@@ -199,60 +198,6 @@ class Slurm(Runner):
             # sbatch_cmd = f"{sbatch_cmd} {wait_logic} && tail -f $LOGFILE"
 
             self.run_script_thunk = '\n'.join(sbatch_cmds)
-
-
-class SlurmManager(Runner):
-    """launches slurm jobs through Jaynes Client"""
-
-    def __init__(self, *, mounts=None, pypath="", setup="", startup=None, work_dir=None, envs=None,
-                 n_gpu=None, entry_script="python -u -m jaynes.entry",
-                 partition="dev", time_limit="5", n_cpu=4, name="", comment="", label=False, args=None,
-                 post_script="", **options):
-        """
-
-        :param mounts:
-        :param pypath:
-        :param setup:
-        :param startup:
-        :param work_dir:
-        :param envs:
-        :param n_gpu:
-        :param entry_script:
-        :param partition:
-        :param time_limit:
-        :param n_cpu:
-        :param name:
-        :param comment:
-        :param label:
-        :param args:
-        :param post_script: a script attached to after run_script
-        :param options:
-        """
-        work_dir = work_dir or os.getcwd()
-
-        super().__init__(mounts, work_dir, pypath, startup, entry_script, post_script)
-
-        # --get-user-env
-        setup_cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running on login-node"\n"""
-        setup_cmd += (setup.strip() + '\n') if setup else ''
-
-        # some cluster only allows --gres=gpu:[1-]
-        gres = f"--gres=gpu:{n_gpu}" if n_gpu else ""
-        extra_options = " ".join([f"--{k.replace('_', '-')}='{v}'" for k, v in options.items()])
-        if args:
-            extra_options = "".join([f"--{a} " for a in args]) + extra_options
-
-        """
-        use bash mode if there is a startup script. This is not supported on some clusters.
-        For example in vector institute's cluster this does not direct outputs to the 
-        stdout.
-        """
-        slurm_cmd = f"srun {gres} --partition={partition} --time={time_limit} " \
-                    f"--cpus-per-task {n_cpu} --job-name='{name}' {'--label' if label else ''} " \
-                    f"--comment='{comment}' {extra_options} /bin/bash -l -c '{{JYNS_main_script}} & wait'"
-
-        self.run_script_thunk = f""" 
-        {setup_cmd} {envs if envs else ""} {slurm_cmd} """
 
 
 class Simple(Runner):
