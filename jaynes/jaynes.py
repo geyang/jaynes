@@ -75,7 +75,7 @@ class Jaynes:
     @classmethod
     def raw_config(cls, config_path=None, ctx={}):
         if cls._raw_config:
-            return cls._raw_config, cls._secret
+            return cls._raw_config
 
         from inspect import isclass
 
