@@ -22,7 +22,6 @@ class EC2(Launcher):
         runner.launch_config = self.config.copy()
 
     def plan_instance(self, verbose=None):
-        print('planning')
         launch_script = make_launch_script(runners=self.runners, mounts=self.all_mounts,
                                            unpack_on_host=True, **self.config)
         launch_config = self.runners[0].launch_config

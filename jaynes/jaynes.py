@@ -43,16 +43,21 @@ class Jaynes:
     runner_config = None
 
     _raw_config = None
+    _secret = None
 
     @classmethod
-    def format_context(cls, **ext):
-        return dict(env=SimpleNamespace(**os.environ), now=RUN.now, uuid=uuid4(), RUN=RUN, **ext)
+    def format_context(cls, config_root=None, **ext):
+        try:
+            with open(config_root + "/.secret.yml", 'r') as f:
+                secret = yaml.safe_load(f)
+        except FileNotFoundError:
+            secret = dict()
+
+        return dict(env=SimpleNamespace(**os.environ), now=RUN.now, uuid=uuid4(), RUN=RUN,
+                    secret=SimpleNamespace(**secret), **ext)
 
     @classmethod
-    def raw_config(cls, config_path=None, ctx={}):
-        if cls._raw_config:
-            return cls._raw_config
-
+    def config_root(cls, config_path=None):
         if config_path is None:
             for d in cwd_ancestors():
                 try:
@@ -60,11 +65,17 @@ class Jaynes:
                     break
                 except Exception:
                     pass
+
         if config_path is None:
             cprint('No `.jaynes.yml` is found. Run `jaynes.init` to create a configuration file.', "red")
             return
 
-        RUN.config_root = os.path.dirname(config_path)
+        return os.path.dirname(config_path), config_path
+
+    @classmethod
+    def raw_config(cls, config_path=None, ctx={}):
+        if cls._raw_config:
+            return cls._raw_config, cls._secret
 
         from inspect import isclass
 
@@ -102,7 +113,8 @@ class Jaynes:
                 mount.upload(verbose=verbose, **host)
 
     @classmethod
-    def config(cls, mode=None, *, config_path=None, runner=None, host=None, launch=None, verbose=None, **ext):
+    def config(cls, mode=None, *, config_path=None, runner=None, host=None, launch=None, verbose=None,
+               **ext):
         """
         Configuration function for Jaynes
 
@@ -119,8 +131,9 @@ class Jaynes:
 
         cprint(f"Launching {mode or '<default>'} mode", color="blue")
 
-        ctx = cls.format_context(**ext)
+        RUN.config_root, config_path = cls.config_root(config_path)
 
+        ctx = cls.format_context(RUN.config_root, **ext)
         config = cls.raw_config(config_path, ctx).copy()
 
         # saving so that ml-logger can use this
@@ -173,6 +186,7 @@ class Jaynes:
         Runner, runner_kwargs = cls.runner_config
         # interpolation context
         context = cls.format_context(
+            RUN.config_root,
             mounts=cls.mounts,
             run=SimpleNamespace(
                 count=RUN.count,

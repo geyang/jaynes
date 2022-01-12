@@ -7,6 +7,7 @@ from jaynes.launchers.base_launcher import Launcher, make_launch_script
 
 class Manager(Launcher):
     host_unpacked = None
+    launch_script = None
 
     def setup_host(self, verbose=None, **_):
         if self.host_unpacked:
@@ -26,10 +27,12 @@ class Manager(Launcher):
     def plan_instance(self, verbose=None):
         self.launch_script = make_launch_script(runners=self.runners, mounts=self.all_mounts,
                                                 unpack_on_host=self.host_unpacked, **self.config)
+        self.runners.clear()
         if verbose:
             print(self.launch_script)
 
     def execute(self, verbose=None):
+        self.plan_instance(verbose=verbose)
         return launch_manager(self.launch_script, **self.config)
 
 
@@ -37,19 +40,16 @@ def launch_manager(launch_script, host, launch_dir, script_name="jaynes_launch.s
                    token=None, sudo=False, cleanup=True, verbose=False, timeout=None, **_):
     # from termcolor import cprint
 
-    tf = tempfile.NamedTemporaryFile(prefix="jaynes_launcher-", suffix=".sh", delete=False)
-    with open(tf.name, 'w') as f:
-        f.write(launch_script)
-    tf.file.close()
-
     client = JaynesClient(host)
-
     remote_script_name = launch_dir + "/" + script_name
-    client.upload_file(tf.name, remote_script_name)
 
-    if verbose:
-        print(launch_script)
+    with tempfile.NamedTemporaryFile(prefix="jaynes_launch-", suffix=".sh", mode="w+") as f:
+        f.write(launch_script)
+        f.flush()
 
+        client.upload_file(f.name, remote_script_name)
+
+    # need to implement the timeout on the server side to avoid congestion
     return client.execute(f"bash {remote_script_name}", timeout)
     # try:
     #     stdout, stderr, error = r
