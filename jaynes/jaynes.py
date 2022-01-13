@@ -227,7 +227,7 @@ class Jaynes:
         this is aware of the launch type"""
 
         if not cls.launcher:
-            config()
+            cls.config(cls.mode)
 
         if cls.launcher.last_runner:
             cls.launcher.plan_instance(cls.verbose)
@@ -242,6 +242,7 @@ class Jaynes:
 
     @classmethod
     def chain(cls, fn, *args, **kwargs):
+        assert cls.launcher.last_runner, "launcher must already contain a runner"
         if cls.launcher.last_runner.chain is None:
             # In Docker for example, chaining should just add another runner.
             # return cls.add(fn, *args, **kwargs)
