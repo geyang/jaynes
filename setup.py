@@ -6,6 +6,8 @@ with open(path.join(path.abspath(path.dirname(__file__)), 'README'), encoding='u
     long_description = f.read()
 with open(path.join(path.abspath(path.dirname(__file__)), 'VERSION'), encoding='utf-8') as f:
     version = f.read()
+with open(path.join(path.abspath(path.dirname(__file__)), 'LICENSE'), encoding='utf-8') as f:
+    license = f.read()
 
 setup(
     name="jaynes",
@@ -15,7 +17,7 @@ setup(
     url="https://github.com/episodeyang/jaynes",
     author="Ge Yang",
     author_email="yangge1987@gmail.com",
-    license=None,
+    license=license,
     keywords=["jaynes", "logging", "DEBUG", "debugging", "timer",
               "timeit", "decorator", "stopwatch", "tic", "toc",
               ],
