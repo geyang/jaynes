@@ -177,4 +177,4 @@ class GCE(Launcher):
             return self.launch_instance(verbose=verbose)
         self.plan_instance(verbose=verbose)
         # todo: needs to return a list of request_ids.
-        self.gce_batch_request.execute(verbose=verbose)
+        self.gce_batch_request.execute()
