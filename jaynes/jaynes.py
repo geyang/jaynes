@@ -37,6 +37,7 @@ class RUN:
 
 
 class Jaynes:
+    mode = None
     verbose = None
     mounts = []
     launcher = None
