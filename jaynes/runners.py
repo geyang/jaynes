@@ -393,8 +393,7 @@ class Container(Runner):
     :param tty: almost never used. This is because when this script is ran, it is almost garanteed that the
                 ssh/bash session is not going to be tty.
     :param post_script: a script attached to after run_script
-    :param **kwargs: passed in as parameters to docker command.
-                memory="4g" gets translated into `--memory 4g`
+    :param **kwargs: Not used
     """
     job = None
 
