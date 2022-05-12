@@ -10,6 +10,10 @@ from .helpers import get_temp_dir
 class Mount:
     local_script = None
 
+    # used by kubernetes
+    init_container = None
+    volume_mount = None
+
     def upload(self, verbose=None, **_):
         if self.local_script is None:
             return
@@ -58,6 +62,8 @@ class S3Code(Mount):
           excludes: "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info' --exclude='*.pkl'"
           compress: true
 
+    - kubernetes' volume_path corresponds to `container_path`. The `subPath` corresponds to `host_path` in some sense.
+    - mount_path corresponds to raw mounting path in the init container.
 
     :param local_path: path to the local directory. Doesn't have to be absolute.
     :param prefix: The s3 prefix including the s3: protocol, the bucket, and the path prefix.
@@ -67,10 +73,16 @@ class S3Code(Mount):
     :param pypath (bool): Whether this directory should be added to the python path
     :param excludes: The files paths to exclude, default to "--exclude='*__pycache__'"
     :param file_mask: The file mask for files to include. Default to "."
+    :param compress: Whether to compress the tar ball. Default to true
+    :param acl: The ACL to set on the s3 object. When set to "public-read", the object will be publicly accessible.
+                This is needed for aws s3 download without credentials.
+    :param no_sign: Whether to sign the s3 url. When set to true, the aws s3 download does not require credientials.
+                    This needs to be used with the [acl: "public-read"] option.
     :return: self
     """
 
     def __init__(self, *, prefix, local_path, host_path=None,
+                 volume=None, mount_path=None, sub_path=None, init_image="alpine:latest",
                  remote_tar=None, container_path=None,
                  docker_mount_type="bind",
                  pypath=False, excludes=None, file_mask=None,
@@ -88,8 +100,13 @@ class S3Code(Mount):
             ignore_file_path = os.path.join(RUN.config_root, exclude_from)
             tar_options += f" --exclude-from='{ignore_file_path}'"
 
+        name = name or str(uuid4())
+
+        sub_path = sub_path or name
+        mount_path = mount_path or "/tmp"
         if not host_path:
-            host_path = f"/tmp/{name}"
+            host_path = pathJoin(mount_path, sub_path)
+
         if container_path:
             container_path = os.path.expandvars(container_path)
             self.container_path = os.path.abspath(container_path)
@@ -100,7 +117,6 @@ class S3Code(Mount):
             file_mask = file_mask or "."  # file_mask can Not be None or "".
             excludes = excludes or "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'"
 
-            name = name or uuid4()
             tar_name = f"{name}.tar"
             self.temp_dir = get_temp_dir()
             local_tar = pathJoin(self.temp_dir, tar_name)
@@ -133,6 +149,19 @@ class S3Code(Mount):
 
         self.pypath = pypath
         self.docker_mount = f"--mount type={docker_mount_type},source={host_path},target={self.container_path}"
+        init_script = self.host_setup.strip()
+        self.init_container = {
+            "image": init_image,
+            "name": name,
+            "command": ["/bin/bash"],
+            "args": ['-c'] + [arg.strip() + ';' for arg in init_script.split('\n')],
+            "volumeMounts": [
+                {"name": volume, "mountPath": mount_path, }
+            ]}
+        self.volume_mount = {
+            "name": volume,
+            "mountPath": self.container_path,
+            "subPath": sub_path}
 
 
 class GSCode(Mount):
@@ -174,6 +203,7 @@ class GSCode(Mount):
     """
 
     def __init__(self, *, prefix, local_path, host_path=None,
+                 volume=None, mount_path=None, sub_path=None, init_image="alpine:latest",
                  remote_tar=None, container_path=None,
                  docker_mount_type="bind",
                  pypath=False, excludes=None, file_mask=None,
@@ -190,15 +220,18 @@ class GSCode(Mount):
             ignore_file_path = os.path.join(RUN.config_root, exclude_from)
             tar_options += f" --exclude-from='{ignore_file_path}'"
 
-        name = name or uuid4()
+        name = name or str(uuid4())
+
+        sub_path = sub_path or name
+        mount_path = mount_path or "/tmp"
         if not host_path:
-            host_path = f"/tmp/{name}"
+            host_path = pathJoin(mount_path, sub_path)
+
         if container_path:
             container_path = os.path.expandvars(container_path)
             self.container_path = os.path.abspath(container_path)
         else:
             self.container_path = local_abs
-
 
         if os.path.isdir(local_path):
             file_mask = file_mask or "."  # file_mask can Not be None or "".
@@ -236,6 +269,20 @@ class GSCode(Mount):
 
         self.pypath = pypath
         self.docker_mount = f"--mount type={docker_mount_type},source={host_path},target={self.container_path}"
+
+        init_script = self.host_setup.strip()
+        self.init_container = {
+            "image": init_image,
+            "name": name,
+            "command": ["/bin/bash"],
+            "args": ['-c'] + [arg.strip() + ';' for arg in init_script.split('\n')],
+            "volumeMounts": [
+                {"name": volume, "mountPath": mount_path, }
+            ]}
+        self.volume_mount = {
+            "name": volume,
+            "mountPath": self.container_path,
+            "subPath": sub_path}
 
 
 class S3Output(Mount):
@@ -347,9 +394,9 @@ class SSHCode(Mount):
         self.host_path = host_path
         self.container_path = container_path or host_path
         self.pypath = pypath
+        name = name or str(uuid4())
         self.name = name
         self.compress = compress
-
 
         self.excludes = excludes or "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'"
         self.file_mask = file_mask or "."  # file_mask can Not be None or "".
@@ -367,7 +414,6 @@ class SSHCode(Mount):
             tar_options += f" --exclude-from='{ignore_file_path}'"
 
         if local_tar is None:
-            name = name or uuid4()
             tar_name = f"{name}.tar"
             self.temp_dir = get_temp_dir()
             self.local_tar = pathJoin(self.temp_dir, tar_name)
@@ -426,6 +472,7 @@ class TarMount(Mount):
         self.host_path = host_path
         self.container_path = container_path or host_path
         self.pypath = pypath
+        name = name or str(uuid4())
         self.name = name
         self.compress = compress
 
@@ -444,7 +491,6 @@ class TarMount(Mount):
             tar_options += f" --exclude-from='{ignore_file_path}'"
 
         if local_tar is None:
-            name = name or uuid4()
             tar_name = f"{name}.tar"
             self.temp_dir = get_temp_dir()
             self.local_tar = pathJoin(self.temp_dir, tar_name)

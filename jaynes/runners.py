@@ -1,4 +1,5 @@
 import os
+from copy import deepcopy
 from datetime import datetime
 
 import jaynes
@@ -309,7 +310,6 @@ class Docker(Runner):
 
         mount_string = " ".join([m.docker_mount for m in mounts])
         self.setup_script = setup
-        self.docker_image = image
 
         is_gpu = options.get('gpus', None) or "nvidia" in docker_cmd
 
@@ -352,3 +352,135 @@ echo 'Now run docker'
     #     encoded_thunk = serialize(fn, args, kwargs)
     #     self.main_script = self.main_script_thunk.format(JYNS_encoded_thunk=encoded_thunk)
     #     self.run_script += __sep + self.run_script_thunk.format(JYNS_main_script=self.main_script).strip()
+
+
+class Container(Runner):
+    """
+    Container Runner for Kubernetes
+
+    Example
+    -------
+
+    to configure the Container runner in :code:`jaynes.yml`, you can do
+
+    .. code:: yaml
+
+        # ⬇️ this is a yaml syntax to select the class
+        runner: !runners.Container
+            name: "some-job"  # only for docker
+            image: "episodeyang/super-expert"
+            startup: yes | pip install jaynes ml-logger -q
+            envs: "LANG=utf-8"
+            pypath: "{mounts[0].container_path}"
+            work_dir: "{mounts[0].container_path}"
+            ipc: host
+            use_gpu: false
+
+    :param image: string for the docker image to use.
+    :param mounts: list, reserved by jaynes to pass in the mount objects.
+    :param startup: the script you want to run first INSIDE docker
+    :param mount:
+    :param pypath:
+    :param workdir: this is the option passed on to docker.
+    :param work_dir: this is the current work direction for bash script.
+    :param envs: Set of environment key and variables, a string
+    :param entry_script: "python -u -m jaynes.entry"
+    :param name: Name of the docker container instance, use uuid if is None
+    :param use_gpu:
+    :param sudo: Flag, useful for when running on EC2
+    :param ipc: specify ipc for multiprocessing. Typically 'host'
+    :param net: for ec2, `--net host` allows docker to use the host's IAM for ec2 services
+    :param tty: almost never used. This is because when this script is ran, it is almost garanteed that the
+                ssh/bash session is not going to be tty.
+    :param post_script: a script attached to after run_script
+    :param **kwargs: passed in as parameters to docker command.
+                memory="4g" gets translated into `--memory 4g`
+    """
+    job = None
+
+    def __init__(self, *, image, mounts=None,
+                 workdir=None, work_dir=None,
+                 setup="",
+                 startup=None,
+                 namespace=None,
+                 pypath=None,
+                 envs=None,
+                 entry_script="python -u -m jaynes.entry", name=None,
+                 docker_cmd="docker",
+                 ipc=None,
+                 tty=False,
+                 n_gpu=0,
+                 n_gpu_limit=0,
+                 post_script="",
+                 net=None,
+                 volumes=None,
+                 cpu="50m", memory="50Mi",
+                 cpu_limit=1, memory_limit="200Mi",
+                 restart_policy="Never",
+                 backoff_limit=4,
+                 ttl_seconds_after_finished=3600,
+                 **options):
+        super().__init__(mounts, work_dir, pypath, startup, entry_script, post_script)
+
+        # self.mounts reuses the mounts from the Runner class
+        init_containers = [m.init_container for m in self.mounts]
+        volume_mounts = [m.volume_mount for m in self.mounts]
+
+        self.is_gpu = options.get('gpus', None) or "nvidia" in docker_cmd
+
+        if not n_gpu_limit:
+            n_gpu_limit = n_gpu
+
+        # dynamically generate the job name to avoid conflict
+        docker_container_name = name or f"jaynes-job-{datetime.utcnow():%H%M%S}-{jaynes.RUN.count}"
+
+        self.container_template = {
+            "name": docker_container_name,
+            "namespace": namespace,
+            "image": image,
+            "resources": {
+                "requests": {"memory": memory, "cpu": cpu, "nvidia.com/gpu": n_gpu},
+                "limits": {"memory": memory_limit, "cpu": cpu_limit, "nvidia.com/gpu": n_gpu_limit},
+            },
+            "volumeMounts": volume_mounts,
+            "command": ["/bin/bash", "-c"],
+        }
+
+        self.job_template = {
+            "apiVersion": "batch/v1",
+            "kind": "Job",
+            # reuse the container name for the job
+            "metadata": {"name": docker_container_name},
+            "spec": {
+                "template": {
+                    "spec": {
+                        "volumes": volumes,
+                        "initContainers": init_containers,
+                        "containers": [],
+                        "restartPolicy": restart_policy
+                    },
+
+                },
+                "backoffLimit": backoff_limit,
+                "ttlSecondsAfterFinished": ttl_seconds_after_finished
+            },
+        }
+
+    def build(self, fn, *args, __sep="\n", **kwargs):
+        encoded_thunk = serialize(fn, args, kwargs)
+        self.main_script = self.main_script_thunk.format(JYNS_encoded_thunk=encoded_thunk)
+
+        self.job = deepcopy(self.job_template)
+        container = deepcopy(self.container_template)
+        container['command'].append(self.main_script)
+        self.job['spec']['template']['spec']['containers'].append(container)
+
+    def chain(self, fn, *args, __sep=" &\n", **kwargs):
+        encoded_thunk = serialize(fn, args, kwargs)
+        self.main_script = self.main_script_thunk.format(JYNS_encoded_thunk=encoded_thunk)
+
+        assert self.job is not None
+
+        container = deepcopy(self.container_template)
+        container['command'].append(self.main_script)
+        self.job['spec']['template']['spec']['containers'].append(container)

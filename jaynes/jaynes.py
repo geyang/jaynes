@@ -225,7 +225,8 @@ class Jaynes:
         """
         Method for adding a runner.
 
-        this is aware of the launch type"""
+        this is aware of the launch type
+        """
 
         if not cls.launcher:
             cls.config(cls.mode)
@@ -259,6 +260,7 @@ class Jaynes:
         else:
             Runner, hydrated_config = cls.process_runner_config()
 
+            # note: there is no mounts here. Reuses instance mounts.
             cls.launcher.last_runner.__init__(**hydrated_config)
             cls.launcher.last_runner.chain(fn, *args, **kwargs)
 
@@ -266,7 +268,9 @@ class Jaynes:
 
     @classmethod
     def launch_instance(cls, verbose=None):
-        """with GCP, this returns the request ID."""
+        """Only used with GCP.
+        This returns the request ID for this instance if it is
+        a spot request, instance ID if it is on-demand."""
         return cls.launcher.launch_instance(verbose=verbose or cls.verbose)
 
     @classmethod
@@ -302,6 +306,6 @@ config = Jaynes.config
 run = Jaynes.run
 add = Jaynes.add
 chain = Jaynes.chain
-launch_instance = Jaynes.launch_instance
+# launch_instance = Jaynes.launch_instance
 # plan = Jaynes.plan
 execute = Jaynes.execute
