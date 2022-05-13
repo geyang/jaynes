@@ -469,7 +469,9 @@ class Container(Runner):
         encoded_thunk = serialize(fn, args, kwargs)
         self.main_script = self.main_script_thunk.format(JYNS_encoded_thunk=encoded_thunk)
 
-        self.job = deepcopy(self.job_template)
+        if self.job is None:
+            self.job = deepcopy(self.job_template)
+
         container = deepcopy(self.container_template)
         container['command'].append(self.main_script)
         self.job['spec']['template']['spec']['containers'].append(container)
@@ -480,6 +482,9 @@ class Container(Runner):
 
         assert self.job is not None
 
-        container = deepcopy(self.container_template)
-        container['command'].append(self.main_script)
-        self.job['spec']['template']['spec']['containers'].append(container)
+        command_list = self.job['spec']['template']['spec']['containers'][-1]['command']
+
+        if command_list[-1].endswith("& wait"):
+            command_list[-1] = command_list[-1][:-6]
+
+        command_list[-1] += "& \n" + self.main_script + "& wait"

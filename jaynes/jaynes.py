@@ -258,6 +258,8 @@ class Jaynes:
             cls.launcher.add_runner(runner)
 
         else:
+            ### some runners require custom chaining logic. In Kubernetes for example,
+            ### chaining extends the command list.
             Runner, hydrated_config = cls.process_runner_config()
 
             # note: there is no mounts here. Reuses instance mounts.
@@ -277,7 +279,10 @@ class Jaynes:
     def execute(J, verbose=None):
         verbose = verbose or J.verbose
         J.launcher.setup_host(verbose=verbose)
-        return J.launcher.execute(verbose=verbose)
+        if J.launcher.last_runner:
+            return J.launcher.execute(verbose=verbose)
+        else:
+            raise ValueError("No runners in launcher")
 
     @classmethod
     def run(J, fn, *args, **kwargs, ):

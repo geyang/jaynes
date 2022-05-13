@@ -19,6 +19,7 @@ class Kube(Launcher):
         # cache the launch config
         runner.launch_config = self.config.copy()
 
+    # This packs the pod.
     def plan_instance(self, verbose=False):
         while self.last_runner:
             runner = self.runners.pop(-1)
