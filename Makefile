@@ -31,8 +31,8 @@ release:
 	git tag v$(VERSION) -m '$(msg)'
 	git push origin --tags
 revert:
-	git tag -d $(VERSION)
-	git push origin :refs/tags/$(VERSION)
+	git tag -d v$(VERSION)
+	git push origin :refs/tags/v$(VERSION)
 
 publish: convert-rst
 	make test
