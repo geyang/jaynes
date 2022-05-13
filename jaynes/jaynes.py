@@ -293,7 +293,7 @@ class Jaynes:
         return J.execute()
 
 
-def listen(timeout=None):
+def listen(timeout=None, interval=math.pi * 5, command=None, backoff_limit=None):
     """Just a for-loop, to keep ths process connected to the ssh session"""
 
     cprint('Jaynes pipe-back is now listening...', "blue")
@@ -302,9 +302,15 @@ def listen(timeout=None):
         time.sleep(timeout)
         cprint(f'jaynes.listen(timeout={timeout}) is now timed out. remote routine is still running.', 'green')
     else:
-        while True:
-            time.sleep(math.pi * 20)
-            cprint('Listening to pipe back...', 'blue')
+        backoff = 0
+        cprint('Listening to pipe back...', 'blue')
+        while backoff_limit is None or backoff_limit > backoff:
+            if command is not None:
+                status = os.system(command)
+                if status == 0:
+                    break
+            time.sleep(interval)
+            backoff += 1
 
 
 config = Jaynes.config

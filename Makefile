@@ -30,6 +30,10 @@ update-doc: convert-rst
 release:
 	git tag v$(VERSION) -m '$(msg)'
 	git push origin --tags
+revert:
+	git tag -d $(VERSION)
+	git push origin :refs/tags/$(VERSION)
+
 publish: convert-rst
 	make test
 	make wheel

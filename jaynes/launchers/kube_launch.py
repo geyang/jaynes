@@ -37,9 +37,17 @@ class Kube(Launcher):
         # packing all jobs into one request and launch
         with NamedTemporaryFile(mode="w+", suffix="jaynes-kube.yaml", delete=False) as config_file:
             yaml.dump_all(self.jobs, config_file, default_flow_style=False)
+            self.jobs.clear()
             if verbose:
                 print('dumping the kubernetes job yaml file to ' + config_file.name)
-            import os
-            os.system(f"kubectl apply -f " + config_file.name)
+            from subprocess import Popen, PIPE
 
-        self.jobs.clear()
+            proc = Popen(f"kubectl apply -f " + config_file.name, shell=True, stdout=PIPE)
+            outs = []
+            while True:
+                out = proc.stdout.read1().decode("utf-8")
+                outs.append(out[:-8])
+                print(out, end="")
+                if out == "":
+                    break
+            return outs
