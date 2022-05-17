@@ -154,7 +154,7 @@ class S3Code(Mount):
             "image": init_image,
             "name": name,
             "command": ["/bin/bash"],
-            "args": ['-c'] + [arg.strip() + ';' for arg in init_script.split('\n')],
+            "args": ['-c'] + [init_script],
             "volumeMounts": [
                 {"name": volume, "mountPath": mount_path, }
             ]}
@@ -275,7 +275,7 @@ class GSCode(Mount):
             "image": init_image,
             "name": name,
             "command": ["/bin/bash"],
-            "args": ['-c'] + [arg.strip() + ';' for arg in init_script.split('\n')],
+            "args": ['-c'] + [init_script],
             "volumeMounts": [
                 {"name": volume, "mountPath": mount_path, }
             ]}

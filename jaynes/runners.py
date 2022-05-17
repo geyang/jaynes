@@ -288,7 +288,7 @@ class Docker(Runner):
     :param mount:
     :param pypath:
     :param workdir: this is the option passed on to docker.
-    :param work_dir: this is the current work direction for bash script.
+    :param work_dir: this is the current work directory for the bash script.
     :param envs: Set of environment key and variables, a string
     :param entry_script: "python -u -m jaynes.entry"
     :param name: Name of the docker container instance, use uuid if is None
@@ -303,7 +303,7 @@ class Docker(Runner):
                 memory="4g" gets translated into `--memory 4g`
     """
 
-    def __init__(self, *, image, mounts=None, workdir=None, work_dir=None, setup="", startup=None,
+    def __init__(self, *, image, mounts=None, work_dir=None, workdir=None, setup="", startup=None,
                  pypath=None, envs=None, entry_script="python -u -m jaynes.entry", name=None,
                  docker_cmd="docker", ipc=None, tty=False, post_script="", net=None, **options):
         super().__init__(mounts, work_dir, pypath, startup, entry_script, post_script)
@@ -382,7 +382,7 @@ class Container(Runner):
     :param mount:
     :param pypath:
     :param workdir: this is the option passed on to docker.
-    :param work_dir: this is the current work direction for bash script.
+    :param work_dir: this is the current work directory for the bash script.
     :param envs: Set of environment key and variables, a string
     :param entry_script: "python -u -m jaynes.entry"
     :param name: Name of the docker container instance, use uuid if is None
@@ -398,7 +398,8 @@ class Container(Runner):
     job = None
 
     def __init__(self, *, image, mounts=None,
-                 workdir=None, work_dir=None,
+                 work_dir=None,
+                 workdir=None,
                  setup="",
                  startup=None,
                  namespace=None,
@@ -414,7 +415,7 @@ class Container(Runner):
                  net=None,
                  volumes=None,
                  cpu="50m", memory="50Mi",
-                 cpu_limit=1, memory_limit="200Mi",
+                 cpu_limit=None, memory_limit=None,
                  restart_policy="Never",
                  backoff_limit=4,
                  ttl_seconds_after_finished=3600,
@@ -429,13 +430,16 @@ class Container(Runner):
 
         if not n_gpu_limit:
             n_gpu_limit = n_gpu
+        if not cpu_limit:
+            cpu_limit = cpu
+        if not memory_limit:
+            memory_limit = memory
 
         # dynamically generate the job name to avoid conflict
         docker_container_name = name or f"jaynes-job-{datetime.utcnow():%H%M%S}-{jaynes.RUN.count}"
 
         self.container_template = {
             "name": docker_container_name,
-            "namespace": namespace,
             "image": image,
             "resources": {
                 "requests": {"memory": memory, "cpu": cpu, "nvidia.com/gpu": n_gpu},
@@ -444,6 +448,10 @@ class Container(Runner):
             "volumeMounts": volume_mounts,
             "command": ["/bin/bash", "-c"],
         }
+        if namespace:
+            self.container_template["namespace"] = namespace
+        if workdir:
+            self.container_template["workingDir"] = workdir
 
         self.job_template = {
             "apiVersion": "batch/v1",
