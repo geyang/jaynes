@@ -83,6 +83,7 @@ class S3Code(Mount):
 
     def __init__(self, *, prefix, local_path, host_path=None,
                  volume=None, mount_path=None, sub_path=None, init_image="alpine:latest",
+                 init_image_pull_policy="IfNotPresent",
                  remote_tar=None, container_path=None,
                  docker_mount_type="bind",
                  pypath=False, excludes=None, file_mask=None,
@@ -152,6 +153,8 @@ class S3Code(Mount):
         init_script = self.host_setup.strip()
         self.init_container = {
             "image": init_image,
+            # fixme: hard-coded for now
+            "imagePullPolicy": init_image_pull_policy,
             "name": name,
             "command": ["/bin/bash"],
             "args": ['-c'] + [init_script],
@@ -204,6 +207,7 @@ class GSCode(Mount):
 
     def __init__(self, *, prefix, local_path, host_path=None,
                  volume=None, mount_path=None, sub_path=None, init_image="alpine:latest",
+                 init_image_pull_policy="IfNotPresent",
                  remote_tar=None, container_path=None,
                  docker_mount_type="bind",
                  pypath=False, excludes=None, file_mask=None,
@@ -273,6 +277,8 @@ class GSCode(Mount):
         init_script = self.host_setup.strip()
         self.init_container = {
             "image": init_image,
+            # fixme: hard-coded for now
+            "imagePullPolicy": init_image_pull_policy,
             "name": name,
             "command": ["/bin/bash"],
             "args": ['-c'] + [init_script],

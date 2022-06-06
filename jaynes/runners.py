@@ -390,14 +390,16 @@ class Container(Runner):
     :param sudo: Flag, useful for when running on EC2
     :param ipc: specify ipc for multiprocessing. Typically 'host'
     :param net: for ec2, `--net host` allows docker to use the host's IAM for ec2 services
-    :param tty: almost never used. This is because when this script is ran, it is almost garanteed that the
+    :param tty: almost never used. This is because when this script is ran, it is almost guaranteed that the
                 ssh/bash session is not going to be tty.
     :param post_script: a script attached to after run_script
     :param **kwargs: Not used
     """
     job = None
 
-    def __init__(self, *, image, mounts=None,
+    def __init__(self, *, image,
+                 image_pull_policy="IfNotPresent",
+                 mounts=None,
                  work_dir=None,
                  workdir=None,
                  setup="",
@@ -410,6 +412,7 @@ class Container(Runner):
                  ipc=None,
                  tty=False,
                  n_gpu=0,
+                 gpu_types=None,
                  n_gpu_limit=0,
                  post_script="",
                  net=None,
@@ -417,7 +420,7 @@ class Container(Runner):
                  cpu="50m", memory="50Mi",
                  cpu_limit=None, memory_limit=None,
                  restart_policy="Never",
-                 backoff_limit=4,
+                 backoff_limit=1,
                  ttl_seconds_after_finished=3600,
                  **options):
         super().__init__(mounts, work_dir, pypath, startup, entry_script, post_script)
@@ -441,6 +444,7 @@ class Container(Runner):
         self.container_template = {
             "name": docker_container_name,
             "image": image,
+            "imagePullPolicy": image_pull_policy,
             "resources": {
                 "requests": {"memory": memory, "cpu": cpu, "nvidia.com/gpu": n_gpu},
                 "limits": {"memory": memory_limit, "cpu": cpu_limit, "nvidia.com/gpu": n_gpu_limit},
@@ -464,7 +468,7 @@ class Container(Runner):
                         "volumes": volumes,
                         "initContainers": init_containers,
                         "containers": [],
-                        "restartPolicy": restart_policy
+                        "restartPolicy": restart_policy,
                     },
 
                 },
@@ -472,6 +476,20 @@ class Container(Runner):
                 "ttlSecondsAfterFinished": ttl_seconds_after_finished
             },
         }
+
+        if gpu_types is not None:
+            affinity = {"nodeAffinity": {
+                "requiredDuringSchedulingIgnoredDuringExecution": {
+                    "nodeSelectorTerms": [{
+                        "matchExpressions": [{
+                            "key": "nvidia.com/gpu.product",
+                            "operator": "In",
+                            "values": gpu_types.split(',')
+                        }]
+                    }]
+                }
+            }}
+            self.job_template["spec"]["template"]["spec"]["affinity"] = affinity
 
     def build(self, fn, *args, __sep="\n", **kwargs):
         encoded_thunk = serialize(fn, args, kwargs)

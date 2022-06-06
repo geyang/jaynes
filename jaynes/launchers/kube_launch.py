@@ -32,6 +32,7 @@ class Kube(Launcher):
     def execute(self, verbose=None):
         import yaml
         self.plan_instance(verbose=verbose)
+
         from tempfile import NamedTemporaryFile
 
         # packing all jobs into one request and launch
