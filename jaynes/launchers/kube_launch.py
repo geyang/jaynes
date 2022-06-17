@@ -6,12 +6,14 @@ from jaynes.runners import Runner
 
 
 class Kube(Launcher):
+    jobs = None
     def __init__(self, namespace=None, verbose=False, name=None, tags={}, **_):
         super().__init__(namespace=namespace,
                          verbose=verbose,
                          name=name or f"jaynes-job-{datetime.utcnow():%H%M%S}-{jaynes.RUN.count}",
                          tags=tags, **_)
-        self.jobs = []
+        if self.jobs is None:
+            self.jobs = []
 
     def add_runner(self, runner: Runner):
         """Adds a job/Pod to the list of jobs to launch"""

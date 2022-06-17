@@ -342,7 +342,7 @@ echo -ne 'remove existing container '
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""
 {remove_by_name if name else ""}
-{test_gpu if is_gpu else ""}
+# {test_gpu if is_gpu else ""}
 echo 'Now run docker'
 {docker_cmd} run -i{"t" if tty else ""} {config} {rest_config} {mount_string} --name '{docker_container_name}' \\
 {image} /bin/bash -c '{{JYNS_main_script}} & wait' """
@@ -399,6 +399,7 @@ class Container(Runner):
 
     def __init__(self, *, image,
                  image_pull_policy="IfNotPresent",
+                 image_pull_secret=None,
                  mounts=None,
                  work_dir=None,
                  workdir=None,
@@ -417,8 +418,8 @@ class Container(Runner):
                  post_script="",
                  net=None,
                  volumes=None,
-                 cpu="50m", memory="50Mi",
-                 cpu_limit=None, memory_limit=None,
+                 cpu="50m", mem="50Mi",
+                 cpu_limit=None, mem_limit=None,
                  restart_policy="Never",
                  backoff_limit=1,
                  ttl_seconds_after_finished=3600,
@@ -435,8 +436,8 @@ class Container(Runner):
             n_gpu_limit = n_gpu
         if not cpu_limit:
             cpu_limit = cpu
-        if not memory_limit:
-            memory_limit = memory
+        if not mem_limit:
+            mem_limit = mem
 
         # dynamically generate the job name to avoid conflict
         docker_container_name = name or f"jaynes-job-{datetime.utcnow():%H%M%S}-{jaynes.RUN.count}"
@@ -446,8 +447,8 @@ class Container(Runner):
             "image": image,
             "imagePullPolicy": image_pull_policy,
             "resources": {
-                "requests": {"memory": memory, "cpu": cpu, "nvidia.com/gpu": n_gpu},
-                "limits": {"memory": memory_limit, "cpu": cpu_limit, "nvidia.com/gpu": n_gpu_limit},
+                "requests": {"memory": mem, "cpu": cpu, "nvidia.com/gpu": n_gpu},
+                "limits": {"memory": mem_limit, "cpu": cpu_limit, "nvidia.com/gpu": n_gpu_limit},
             },
             "volumeMounts": volume_mounts,
             "command": ["/bin/bash", "-c"],
@@ -476,6 +477,8 @@ class Container(Runner):
                 "ttlSecondsAfterFinished": ttl_seconds_after_finished
             },
         }
+        if image_pull_secret:
+            self.job_template['spec']['template']['spec']["imagePullSecrets"] = [{"name": image_pull_secret}]
 
         if gpu_types is not None:
             affinity = {"nodeAffinity": {
