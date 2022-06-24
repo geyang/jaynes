@@ -342,7 +342,6 @@ echo -ne 'remove existing container '
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""
 {remove_by_name if name else ""}
-# {test_gpu if is_gpu else ""}
 echo 'Now run docker'
 {docker_cmd} run -i{"t" if tty else ""} {config} {rest_config} {mount_string} --name '{docker_container_name}' \\
 {image} /bin/bash -c '{{JYNS_main_script}} & wait' """
@@ -412,9 +411,9 @@ class Container(Runner):
                  docker_cmd="docker",
                  ipc=None,
                  tty=False,
-                 n_gpu=0,
+                 gpu=0,
                  gpu_types=None,
-                 n_gpu_limit=0,
+                 gpu_limit=0,
                  post_script="",
                  net=None,
                  volumes=None,
@@ -432,8 +431,8 @@ class Container(Runner):
 
         self.is_gpu = options.get('gpus', None) or "nvidia" in docker_cmd
 
-        if not n_gpu_limit:
-            n_gpu_limit = n_gpu
+        if not gpu_limit:
+            gpu_limit = gpu
         if not cpu_limit:
             cpu_limit = cpu
         if not mem_limit:
@@ -447,8 +446,8 @@ class Container(Runner):
             "image": image,
             "imagePullPolicy": image_pull_policy,
             "resources": {
-                "requests": {"memory": mem, "cpu": cpu, "nvidia.com/gpu": n_gpu},
-                "limits": {"memory": mem_limit, "cpu": cpu_limit, "nvidia.com/gpu": n_gpu_limit},
+                "requests": {"memory": mem, "cpu": cpu, "nvidia.com/gpu": gpu},
+                "limits": {"memory": mem_limit, "cpu": cpu_limit, "nvidia.com/gpu": gpu_limit},
             },
             "volumeMounts": volume_mounts,
             "command": ["/bin/bash", "-c"],
