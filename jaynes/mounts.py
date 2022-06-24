@@ -163,10 +163,6 @@ class S3Code(Mount):
             "volumeMounts": [
                 {"name": volume, "mountPath": mount_path, }
             ]}
-        if init_image_pull_secret:
-            self.init_container[
-                "imagePullSecrets"
-            ] = [{"name": init_image_pull_secret}]
 
         self.volume_mount = {
             "name": volume,
@@ -215,7 +211,6 @@ class GSCode(Mount):
     def __init__(self, *, prefix, local_path, host_path=None,
                  volume=None, mount_path=None, sub_path=None, init_image="alpine:latest",
                  init_image_pull_policy="IfNotPresent",
-                 init_image_pull_secret=None,
                  remote_tar=None, container_path=None,
                  docker_mount_type="bind",
                  pypath=False, excludes=None, file_mask=None,
