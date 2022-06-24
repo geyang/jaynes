@@ -297,6 +297,8 @@ def listen(timeout=None, interval=math.pi * 5, command=None, backoff_limit=None)
     """Just a for-loop, to keep ths process connected to the ssh session"""
 
     cprint('Jaynes pipe-back is now listening...', "blue")
+    if command:
+        print(command)
 
     if timeout:
         time.sleep(timeout)

@@ -342,7 +342,7 @@ echo -ne 'remove existing container '
         # note: always connect the docker to stdin and stdout.
         self.run_script_thunk = f"""
 {remove_by_name if name else ""}
-echo 'Now run docker'
+echo 'running {image} on' `hostname`
 {docker_cmd} run -i{"t" if tty else ""} {config} {rest_config} {mount_string} --name '{docker_container_name}' \\
 {image} /bin/bash -c '{{JYNS_main_script}} & wait' """
 
