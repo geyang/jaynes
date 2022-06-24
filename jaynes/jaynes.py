@@ -114,7 +114,7 @@ class Jaynes:
                 mount.upload(verbose=verbose, **host)
 
     @classmethod
-    def config(cls, mode=None, *, config_path=None, runner=None, host=None, launch=None, verbose=None,
+    def config(cls, mode=None, *, config_path=None, runner=None, launch=None, verbose=None,
                **ext):
         """
         Configuration function for Jaynes
@@ -122,7 +122,6 @@ class Jaynes:
         :param mode: the run mode you want to use, specified under the `modes` key inside your jaynes.yml config file
         :param config_path: the path to the configuration file. Allows you to use a custom configuration file
         :param runner: configuration for the runner, overwrites what's in the jaynes.yml file.
-        :param host: configuration for the host machine, overwrites what's in the jaynes.yml file.
         :param launch: configuration for the `launch` function, overwrites what's in the jaynes.yml file
         :param ext: variables to pass into the string interpolation. Shows up directly as root-level variables in
                     the string interpolation context
@@ -145,10 +144,12 @@ class Jaynes:
         elif mode:
             modes = config.get('modes', {})
             config.update(modes[mode])
+            # config = modes[mode]
         else:
             run = config.get('run')
             assert run, "`run` field in .jaynes.yml can not be empty when using default config"
             config.update(run)
+            # config = run
 
         if verbose is not None:
             cls.verbose = verbose
@@ -159,11 +160,13 @@ class Jaynes:
             cls.runner_config = config['runner']
         if runner:
             Runner, runner_config = cls.runner_config
-            local_copy = runner_config.copy()
-            local_copy.update(runner)
-            cls.runner_config = Runner, local_copy
+            runner_config.update(runner)
+            # local_copy = runner_config.copy()
+            # local_copy.update(runner)
+            # cls.runner_config = Runner, local_copy
 
-        launch_config = config['launch'].copy()
+        # launch_config = config['launch'].copy()
+        launch_config = config['launch']
         if launch:
             launch_config.update(launch)
 
