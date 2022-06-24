@@ -287,8 +287,6 @@ class GSCode(Mount):
             "volumeMounts": [
                 {"name": volume, "mountPath": mount_path, }
             ]}
-        if init_image_pull_secret:
-            self.init_container["imagePullSecrets"] = [{"name": init_image_pull_secret}]
 
         self.volume_mount = {
             "name": volume,
