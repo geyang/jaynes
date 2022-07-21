@@ -13,7 +13,7 @@ these inhomogenous hardward resources a pleasure.
 ```bash
 pip install jaynes
 ```
-The best way to get started with jaynes is to take a look at one of the example projects in the [[**jaynes-starter-kit**]](https://github.com/geyang/jaynes-starter-kit). For a rough idea, here is how to use jaynes to launch a training function:
+The best way to get started with jaynes is to take a look at one of the example projects in the [[**geyang/jaynes-starter-kit**]](https://github.com/geyang/jaynes-starter-kit). For a rough idea, here is how to use jaynes to launch a training function:
 
 To run **locally**:
 ```python
