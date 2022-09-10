@@ -19,17 +19,47 @@ inhomogenous hardward resources a pleasure.
 
    pip install jaynes
 
+The best way to get started with jaynes is to take a look at one of the
+example projects in the
+`[geyang/jaynes-starter-kit] <https://github.com/geyang/jaynes-starter-kit>`__.
+For a rough idea, here is how to use jaynes to launch a training
+function:
+
 To run **locally**:
 
 .. code-block:: python
 
    import jaynes
 
-   def training(arg_1, key_arg=None):
+   def training(arg_1, key_arg=None, key_arg_2=None):
        print(f'training is running! (arg_1={arg_1}, key_arg={key_arg})')
 
-   jaynes.config(mode="local")
+   jaynes.config(mode="local", arg_1=10, key_arg=0.3)
    jaynes.run(training)
+   jaynes.listen()
+
+We recommend setting up a ``main`` training function with the following
+sinature:
+
+.. code-block:: python
+
+   from params_proto import ParamsProto
+
+   class Args(ParamsProto):
+       seed = 100
+       lr = 3e-4
+       # ...
+       
+   def main(**deps):
+       from ml_logger import logger
+       
+       Args._update(deps)
+       logger.log_params(Args=vars(Args))
+       
+       # ... your main training steps
+
+This way you can call the main fn directly for local debugging, but
+launch it as an entry point at scale.
 
 Setup
 -----
