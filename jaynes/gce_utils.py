@@ -2,7 +2,7 @@ import os
 import time
 
 import googleapiclient.discovery
-from params_proto.neo_proto import ParamsProto, Proto
+from params_proto import ParamsProto, Proto
 from six.moves import input
 
 

@@ -30,10 +30,10 @@ setup(
     install_requires=[
         "aiofile",
         "cloudpickle==1.3.0",
-        "pyyaml",
-        "termcolor",
         "functional_notations",
+        "params-proto>=2.10.0",
+        "pyyaml",
         "requests",
-        "params-proto"
+        "termcolor",
     ]
 )

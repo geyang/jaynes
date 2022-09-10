@@ -4,7 +4,7 @@ from aiofile import AIOFile, Reader, Writer
 from sanic import Sanic
 from sanic.response import json
 from sanic.response import json
-from params_proto.neo_proto import ParamsProto
+from params_proto import ParamsProto
 
 
 # todo use neo_proto to support better logic in

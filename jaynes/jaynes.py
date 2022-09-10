@@ -37,7 +37,8 @@ class RUN:
 
 
 class Jaynes:
-    mode = None
+    # Use False as the default mode, to be overwritten on first config
+    mode = False
     verbose = None
     mounts = []
     launcher = None
@@ -130,18 +131,18 @@ class Jaynes:
         from termcolor import cprint
 
         cprint(f"Launching {mode or '<default>'} mode", color="blue")
+        # saving so that ml-logger can use this
+        cls.mode = mode
+        if mode == 'local':
+            cprint("running local mode", "green")
+            return
 
         RUN.config_root, config_path = cls.config_root(config_path)
 
         ctx = cls.format_context(RUN.config_root, **ext)
         config = cls.raw_config(config_path, ctx).copy()
 
-        # saving so that ml-logger can use this
-        cls.mode = mode
-        if mode == 'local':
-            cprint("running local mode", "green")
-            return
-        elif mode:
+        if mode:
             modes = config.get('modes', {})
             config.update(modes[mode])
             # config = modes[mode]
