@@ -453,7 +453,7 @@ class SSHCode(Mount):
 
         ssh_string = f"ssh {_port} {_pem}" if _port or _pem else 'ssh'
         mkdir_script = f"{ssh_string} {username}@{ip} mkdir -p {os.path.dirname(self.remote_tar)}"
-        rsync_script = f"rsync -az -e '{ssh_string}' {self.local_tar} {username}@{ip}:{self.remote_tar}"
+        rsync_script = f"rsync -az -e '{ssh_string}' --info=progress2 {self.local_tar} {username}@{ip}:{self.remote_tar}"
         if password is not None:  # note: now supports password log in!
             # rsync_script = f'expect <<EOF\nspawn {rsync_script};expect \"password:\";send \"{password}\\r\"\nEOF'
             # need to install sshpass from:
