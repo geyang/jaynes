@@ -134,8 +134,9 @@ class Slurm(Runner):
         # --get-user-env
         setup_cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running on login-node `hostname`"\n"""
         setup_cmd += (setup.strip() + '\n') if setup else ''
-        if pypath:
-            setup_cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath}"
+        # remove
+        # if pypath:
+        #     setup_cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath}"
 
         # some cluster only allows --gres=gpu:[1-]
         option_str = ""
