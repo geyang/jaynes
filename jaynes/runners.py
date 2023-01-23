@@ -428,6 +428,7 @@ class Container(Runner):
                  hostPID: bool = False, 
                  runAsGroup = None, 
                  runAsUser = None, 
+                 tolerations_key = None, 
                  **options):
         super().__init__(mounts, work_dir, pypath, startup, entry_script, post_script)
 
@@ -545,10 +546,11 @@ class Container(Runner):
 
         self.job_template["spec"]["template"]["spec"]["priorityClassName"] = "low"
         
-        tolerations= {"effect": "NoSchedule", 
-                    "key": "lianhao-personal-gpus", 
-                     "operator": "Exists" }
-        self.job_template["spec"]["template"]["spec"]["tolerations"]=[tolerations]
+        if tolerations_key is not None:
+            tolerations= {"effect": "NoSchedule", 
+                        "key": f"{tolerations_key}-personal-gpus", 
+                        "operator": "Exists" }
+            self.job_template["spec"]["template"]["spec"]["tolerations"]=[tolerations]
 
 
     def build(self, fn, *args, __sep="\n", **kwargs):
