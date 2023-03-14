@@ -134,9 +134,8 @@ class Slurm(Runner):
         # --get-user-env
         setup_cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running on login-node `hostname`"\n"""
         setup_cmd += (setup.strip() + '\n') if setup else ''
-        # remove
-        # if pypath:
-        #     setup_cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath}"
+        if pypath:
+            setup_cmd += f"export PYTHONPATH=$PYTHONPATH:{pypath}"
 
         # some cluster only allows --gres=gpu:[1-]
         option_str = ""
@@ -421,15 +420,22 @@ class Container(Runner):
                  cpu="50m", mem="50Mi",
                  cpu_limit=None, mem_limit=None,
                  restart_policy="Never",
-                 backoff_limit=1,
+                 backoff_limit=4,
                  ttl_seconds_after_finished=3600,
+                 match_expression_key = None, 
+                 ephemeral_storage = "2Gi", 
+                 hostIPC: bool = True,
+                 hostPID: bool = False, 
+                 runAsGroup = None, 
+                 runAsUser = None, 
+                 tolerations_key = None, 
                  **options):
         super().__init__(mounts, work_dir, pypath, startup, entry_script, post_script)
 
         # self.mounts reuses the mounts from the Runner class
         init_containers = [m.init_container for m in self.mounts]
         volume_mounts = [m.volume_mount for m in self.mounts]
-
+        host_setup = [m.host_setup for m in self.mounts]
         self.is_gpu = options.get('gpus', None) or "nvidia" in docker_cmd
 
         if not gpu_limit:
@@ -447,12 +453,30 @@ class Container(Runner):
             "image": image,
             "imagePullPolicy": image_pull_policy,
             "resources": {
-                "requests": {"memory": mem, "cpu": cpu, "nvidia.com/gpu": gpu},
-                "limits": {"memory": mem_limit, "cpu": cpu_limit, "nvidia.com/gpu": gpu_limit},
+                "requests": {"memory": mem, "cpu": cpu, "nvidia.com/gpu": gpu, "ephemeral-storage": ephemeral_storage},
+                "limits": {"memory": mem_limit, "cpu": cpu_limit, "nvidia.com/gpu": gpu_limit, "ephemeral-storage": ephemeral_storage},
             },
             "volumeMounts": volume_mounts,
             "command": ["/bin/bash", "-c"],
         }
+        init_container_name = "init-container"
+        image_name = "alpine:latest"
+        self.init_script = host_setup[0].strip()
+        self.init_container_template = {
+            "name": init_container_name,
+            "image": image_name,
+            "resources": {
+                "requests": {"memory": mem, "cpu": 10, "nvidia.com/gpu": 1, "ephemeral-storage": ephemeral_storage},
+                "limits": {"memory": mem_limit, "cpu": 10, "nvidia.com/gpu": 1, "ephemeral-storage": ephemeral_storage},
+            },
+            "volumeMounts": volume_mounts,
+            # "command": ["/bin/bash", "-c"],
+            # "args": ['-c'] + [init_script],
+        }
+        # self.init_container_template["command"].append(self.init_script)
+        if init_containers[0] is None:
+            init_containers = deepcopy(self.init_container_template)
+
         if namespace:
             self.container_template["namespace"] = namespace
         if workdir:
@@ -467,7 +491,7 @@ class Container(Runner):
                 "template": {
                     "spec": {
                         "volumes": volumes,
-                        "initContainers": init_containers,
+                        "initContainers": [init_containers],
                         "containers": [],
                         "restartPolicy": restart_policy,
                     },
@@ -479,7 +503,7 @@ class Container(Runner):
         }
         if image_pull_secret:
             self.job_template['spec']['template']['spec']["imagePullSecrets"] = [{"name": image_pull_secret}]
-
+        affinity = None 
         if gpu_types is not None:
             affinity = {"nodeAffinity": {
                 "requiredDuringSchedulingIgnoredDuringExecution": {
@@ -492,7 +516,42 @@ class Container(Runner):
                     }]
                 }
             }}
-            self.job_template["spec"]["template"]["spec"]["affinity"] = affinity
+
+        if match_expression_key is not None:
+            for expression_key in match_expression_key:
+                if affinity is None:
+                    affinity = {"nodeAffinity": {
+                    "requiredDuringSchedulingIgnoredDuringExecution": {
+                        "nodeSelectorTerms": [{
+                            "matchExpressions": [{
+                                "key": f"{expression_key}",
+                                "operator": "Exists",
+                            }]
+                        }]
+                    }
+                }}
+                else:
+                    affinity["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]\
+                        ["nodeSelectorTerms"][0]["matchExpressions"].append({"key": f"{expression_key}", 
+                                                                        "operator": "Exists"})
+
+        self.job_template["spec"]["template"]["spec"]["affinity"] = affinity
+        self.job_template["spec"]["template"]["spec"]["hostIPC"]  = hostIPC
+        self.job_template["spec"]["template"]["spec"]["hostPID"]  = hostPID
+
+        if runAsGroup is not None:
+            securityContext ={"runAsGroup": runAsGroup,
+                            "runAsUser": runAsUser}
+            self.job_template["spec"]["template"]["spec"]["securityContext"]  = securityContext
+
+        self.job_template["spec"]["template"]["spec"]["priorityClassName"] = "low"
+        
+        if tolerations_key is not None:
+            tolerations= {"effect": "NoSchedule", 
+                        "key": f"{tolerations_key}-personal-gpus", 
+                        "operator": "Exists" }
+            self.job_template["spec"]["template"]["spec"]["tolerations"]=[tolerations]
+
 
     def build(self, fn, *args, __sep="\n", **kwargs):
         encoded_thunk = serialize(fn, args, kwargs)

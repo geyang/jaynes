@@ -25,7 +25,9 @@ class Kube(Launcher):
     def plan_instance(self, verbose=False):
         while self.last_runner:
             runner = self.runners.pop(-1)
+            runner.job["metadata"]["name"] = f"job{datetime.utcnow():%H%M%S}-{jaynes.RUN.count}"
             runner.job["metadata"]["namespace"] = runner.launch_config["namespace"]
+            runner.job["spec"]["template"]["spec"]["containers"][0]["name"] =  f"con{datetime.utcnow():%H%M%S}-{jaynes.RUN.count}"
             self.jobs.append(runner.job)
 
             if verbose:

@@ -391,12 +391,14 @@ class SSHCode(Mount):
     :param pypath (bool): Whether this directory should be added to the python path
     :param excludes: The files paths to exclude, default to "--exclude='*__pycache__'"
     :param file_mask: The file mask for files to include. Default to "."
+    :param untar_from_ssh: extract the tar file to the remote server from ssh ddafter transfer
     :return: self
     """
 
     def __init__(self, *, local_path, local_tar=None, host_path=None, remote_tar=None,
                  container_path=None, pypath=False, excludes=None, file_mask=None, name=None,
-                 compress=True, exclude_vcs=True, exclude_from=None, **tar_options):
+                 compress=True, exclude_vcs=True, exclude_from=None, init_container = None, 
+                 volume_mount = None, untar_from_ssh = False, **tar_options):
 
         # I fucking hate the behavior of python defaults. -- GY
         self.local_path = local_path
@@ -406,6 +408,9 @@ class SSHCode(Mount):
         name = name or str(uuid4())
         self.name = name
         self.compress = compress
+        self.volume_mount = volume_mount
+        self.init_container = init_container
+        self.untar_from_ssh = untar_from_ssh 
 
         self.excludes = excludes or "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'"
         self.file_mask = file_mask or "."  # file_mask can Not be None or "".
@@ -431,7 +436,7 @@ class SSHCode(Mount):
             self.temp_dir = os.path.dirname(local_tar)
             self.local_tar = local_tar
 
-        self.remote_tar = remote_tar or f"/tmp/{tar_name}"
+        self.remote_tar = remote_tar or f"/data/scratch/lianhao/mount/{tar_name}"
 
         self.tar_script = f"""
                 type gtar >/dev/null 2>&1 && alias tar=`which gtar`
@@ -441,32 +446,36 @@ class SSHCode(Mount):
                 """
 
         self.host_setup = f"""
-                mkdir -p {self.host_path}
-                tar -{"z" if self.compress else ""}xf {self.remote_tar}{tar_name if self.remote_tar.endswith('/') else ''} -C {self.host_path}
+                mkdir -p {self.host_path};tar -{"z" if self.compress else ""}xf {self.remote_tar}{tar_name if self.remote_tar.endswith('/') else ''} -C {self.host_path}
                 """
+
         # used by the docker runner
         self.docker_mount = f"-v {self.host_path}:{self.container_path}"
+
+
 
     def upload(self, verbose=None, *, username, ip, pem=None, port=None, password=None, profile=None, **_):
         _port = "" if port is None else f"-p {port}"
         _pem = "" if pem is None else f"-i {pem}"
 
         ssh_string = f"ssh {_port} {_pem}" if _port or _pem else 'ssh'
-        mkdir_script = f"{ssh_string} {username}@{ip} mkdir -p {os.path.dirname(self.remote_tar)}"
+        mkdir_script = f"{ssh_string} {username}@{ip} mkdir -p {self.remote_tar[:-4]}"# {os.path.dirname(self.remote_tar)}"
         rsync_script = f"rsync -az -e '{ssh_string}' --info=progress2 {self.local_tar} {username}@{ip}:{self.remote_tar}"
+        untar_script = f"{ssh_string} {username}@{ip} tar -xvf {self.remote_tar} --directory {self.remote_tar[:-4]}"
         if password is not None:  # note: now supports password log in!
             # rsync_script = f'expect <<EOF\nspawn {rsync_script};expect \"password:\";send \"{password}\\r\"\nEOF'
             # need to install sshpass from:
             # https://gist.github.com/arunoda/7790979
             mkdir_script = f"sshpass -p '{password}' {mkdir_script}"
             rsync_script = f"sshpass -p '{password}' {rsync_script}"
-
+            if self.untar_from_ssh:
+                untar_script = f"sshpass -p '{password}' {untar_script}"
+            else:
+                untar_script = ""
         # # scp does not allow file rename.
         # remote_tar_dir = os.path.dirname(remote_tar)
         # scp_script = f"scp {port_.upper()} {pem} {self.local_tar} {username}@{ip}:{remote_tar_dir}"
-
-        self.local_script = dedent(self.tar_script) + mkdir_script + "\n" + rsync_script + "\n"
-
+        self.local_script = dedent(self.tar_script) + mkdir_script + "\n" + rsync_script + "\n" + untar_script
         return super().upload(verbose=verbose)
 
 
