@@ -29,9 +29,9 @@ class Host(Mount):
     :param pypath: boolean flag for whether this mount point should be included in the PYPATH environment variable
     """
 
-    def __init__(self, host_path, container_path, docker_mount_type="bind", pypath=False):
+    def __init__(self, host_path, container_path=None, docker_mount_type="bind", pypath=False):
         self.host_path = host_path
-        self.container_path = container_path
+        self.container_path = container_path or host_path
         self.pypath = pypath
         self.docker_mount = f"--mount type={docker_mount_type},source={host_path},target={container_path}"
 
