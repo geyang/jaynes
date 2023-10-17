@@ -140,10 +140,10 @@ def make_launch_script(runners: Tuple[Runner],
     setup_scripts = "\n".join([r.setup_script for r in runners])
     # note: add wait at the end to terminate process only after all launch scripts finish. Always blocking
     if len(runners) == 1:
-        run_scripts = runners[0].run_script
+        run_scripts = runners[0].run_script.strip()
     else:
         # todo: does not return the correct exit code.
-        run_scripts = "& \n".join([r.run_script for r in runners] + ["wait"])
+        run_scripts = " & \n".join([r.run_script.strip() for r in runners] + ["wait"])
     post_scripts = "\n".join([r.post_script for r in runners])
 
     return f"""

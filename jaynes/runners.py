@@ -516,4 +516,4 @@ class Container(Runner):
         if command_list[-1].endswith("& wait"):
             command_list[-1] = command_list[-1][:-6]
 
-        command_list[-1] += "& \n" + self.main_script + "& wait"
+        command_list[-1] += "&\n" + self.main_script + "& wait"
