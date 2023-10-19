@@ -125,7 +125,7 @@ class Slurm(Runner):
     """
 
     def __init__(self, *, mounts=None, work_dir, pypath=None, setup="", startup=None, envs=None,
-                 n_gpu=None, shell="/bin/bash", entry_script="python -u -m jaynes.entry",
+                 n_gpu=None, shell="/bin/sh", entry_script="python -u -m jaynes.entry",
                  partition=None, interactive=True, n_seq_jobs=1, time_limit: str = None, n_cpu=4, name=None,
                  comment=None, label=False, args=None,
                  post_script="", **options):
@@ -217,7 +217,7 @@ class Simple(Runner):
     """
 
     def __init__(self, *, mounts=None, pypath="", work_dir=None, setup=None, startup=None, envs=None,
-                 shell="/bin/bash", entry_script="python -u -m jaynes.entry", pipe="",
+                 shell="/bin/sh", entry_script="python -u -m jaynes.entry", pipe="",
                  cleanup="", detach=False, post_script="", **_):
         """
 
@@ -305,7 +305,7 @@ class Docker(Runner):
     """
 
     def __init__(self, *, image, mounts=None, work_dir=None, workdir=None, setup="", startup=None,
-                 pypath=None, envs=None, entry_script="python -u -m jaynes.entry", name=None,
+                 pypath=None, envs=None, shell="/bin/sh", entry_script="python -u -m jaynes.entry", name=None,
                  docker_cmd="docker", ipc=None, tty=False, post_script="", net=None, **options):
         super().__init__(mounts, work_dir, pypath, startup, entry_script, post_script)
 
@@ -345,7 +345,7 @@ echo -ne 'remove existing container '
 {remove_by_name if name else ""}
 echo 'running {image} on' `hostname`
 {docker_cmd} run -i{"t" if tty else ""} {config} {rest_config} {mount_string} --name '{docker_container_name}' \\
-{image} /bin/sh -c '{{JYNS_main_script}} & wait' """
+{image} {shell} -c '{{JYNS_main_script}} & wait' """
 
     chain = None
     # def chain(self, fn, *args, __sep=" &\n", **kwargs):
@@ -408,6 +408,7 @@ class Container(Runner):
                  namespace=None,
                  pypath=None,
                  envs=None,
+                 shell="/bin/sh",
                  entry_script="python -u -m jaynes.entry", name=None,
                  docker_cmd="docker",
                  ipc=None,
@@ -451,7 +452,7 @@ class Container(Runner):
                 "limits": {"memory": mem_limit, "cpu": cpu_limit, "nvidia.com/gpu": gpu_limit},
             },
             "volumeMounts": volume_mounts,
-            "command": ["/bin/bash", "-c"],
+            "command": [shell, "-c"],
         }
         if namespace:
             self.container_template["namespace"] = namespace
