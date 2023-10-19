@@ -345,7 +345,7 @@ echo -ne 'remove existing container '
 {remove_by_name if name else ""}
 echo 'running {image} on' `hostname`
 {docker_cmd} run -i{"t" if tty else ""} {config} {rest_config} {mount_string} --name '{docker_container_name}' \\
-{image} /bin/bash -c '{{JYNS_main_script}} & wait' """
+{image} /bin/sh -c '{{JYNS_main_script}} & wait' """
 
     chain = None
     # def chain(self, fn, *args, __sep=" &\n", **kwargs):
