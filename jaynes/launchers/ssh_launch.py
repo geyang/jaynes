@@ -9,9 +9,23 @@ from jaynes.shell import check_call
 from jaynes.templates import ssh_remote_exec
 
 
-def ssh(script, ip, port=None, username="ubuntu", pem=None, profile=None,
-        password=None, sudo=False, cleanup=True, block=False, console_mode=False, dry=False,
-        verbose=False, **_):
+def ssh(
+    script,
+    ip,
+    port=None,
+    username="ubuntu",
+    pem=None,
+    profile=None,
+    password=None,
+    sudo=False,
+    cleanup=True,
+    block=False,
+    console_mode=False,
+    dry=False,
+    verbose=False,
+    options="",
+    **_,
+):
     """
     run launch_script remotely by ip_address. First saves the run script locally as a file, then use
     scp to transfer the script to remote instance then run.
@@ -34,25 +48,31 @@ def ssh(script, ip, port=None, username="ubuntu", pem=None, profile=None,
     """
     # todo: is this still used?
     tf = tempfile.NamedTemporaryFile(prefix="jaynes_launcher-", suffix=".sh", delete=False)
-    with open(tf.name, 'w') as f:
-        _ = os.path.basename(tf.name)  # fixit: does kill require sudo?
+    with open(tf.name, "w") as f:
+        bname = os.path.basename(tf.name)  # fixit: does kill require sudo?
         cleanup_script = dedent(f"""
-            PROCESSES=$(ps aux | grep '[{_[0]}]{_[1:]}' | awk '{{print $2}}')
+            PROCESSES=$(ps aux | grep '[{bname[0]}]{bname[1:]}' | awk '{{print $2}}')
             if [ $PROCESSES ] 
             then
             {"sudo " if sudo else ""}kill $PROCESSES
-            {f"echo 'cleaned up after {_}" if verbose else ""}
+            {f"echo 'cleaned up after {bname}" if verbose else ""}
             fi 
             """)
         f.write(script + cleanup_script if cleanup else "")
     tf.file.close()
 
-    prelaunch_upload_script, launch = ssh_remote_exec(username, ip, tf.name,
-                                                      port=port, pem=pem,
-                                                      profile=profile,
-                                                      password=password,
-                                                      require_password=(profile is not None),
-                                                      sudo=sudo)
+    prelaunch_upload_script, launch = ssh_remote_exec(
+        username,
+        ip,
+        tf.name,
+        port=port,
+        pem=pem,
+        profile=profile,
+        password=password,
+        require_password=(profile is not None),
+        sudo=sudo,
+        options=options,
+    )
 
     # todo: use pipe back to send binary from RPC calls
     if dry:
@@ -73,22 +93,23 @@ def ssh(script, ip, port=None, username="ubuntu", pem=None, profile=None,
         pipe_in = pipe_in + script + "\n"
 
     if verbose:
-        print('ssh pipe-in: ')
+        print(">> launch script is")
+        print(launch)
+        print(">> ssh pipe-in: ")
         print(pipe_in)
 
     import subprocess
+
     if block:
         # todo: not supported. stdout, stderr, requires subprocess.PIPE for the two.
-        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
-        return p.communicate(bytes(pipe_in, 'utf-8'))
+        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return p.communicate(bytes(pipe_in, "utf-8"))
     elif console_mode:
-        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
+        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
         p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=sys.stdout, stderr=sys.stderr)
 
-    p.stdin.write(bytes(pipe_in, 'utf-8'))
+    p.stdin.write(bytes(pipe_in, "utf-8"))
     p.stdin.flush()
 
 
@@ -105,17 +126,17 @@ class SSH(Launcher):
         unpack_script = make_host_unpack_script(mounts=self.all_mounts, **self.config)
 
         if verbose:
-            print('Unpacking On Remote')
-        ssh(script=unpack_script, **omit(self.config, 'block'), block=True,
-            verbose=verbose)
+            print("Unpacking On Remote")
+        ssh(script=unpack_script, **omit(self.config, "launch_dir", "type", "block"), block=True, verbose=verbose)
 
     # SSH does not support planning ahead.
     def plan_instance(self, verbose=None):
         pass
 
     def execute(self, verbose=None):
-        self.launch_script = make_launch_script(runners=self.runners, mounts=self.all_mounts,
-                                                unpack_on_host=self.host_unpacked, **self.config)
+        self.launch_script = make_launch_script(
+            runners=self.runners, mounts=self.all_mounts, unpack_on_host=self.host_unpacked, **self.config
+        )
         self.runners.clear()
         if verbose:
             print(self.launch_script)

@@ -54,37 +54,38 @@ def make_host_unpack_script(mounts: Sequence[Mount], launch_dir="/tmp/jaynes-mou
     log_path = os.path.join(launch_dir, "jaynes-launch.log")
     error_path = os.path.join(launch_dir, "jaynes-launch.err.log")
 
-    all_setup = "\n".join(
-        [m.host_setup for m in mounts if hasattr(m, "host_setup") and m.host_setup]
-    )
+    all_setup = "\n".join([m.host_setup for m in mounts if hasattr(m, "host_setup") and m.host_setup])
 
     host_unpack_script = dedent(f"""
-        #!/bin/bash
-        # to allow process substitution
-        set +o posix
-        {root_config or ""}
-        mkdir -p {launch_dir}
-        {{
-            {all_setup}
-            {f"sleep {delay}" if delay else ""}
-        }} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
-        """).strip()
+#!/bin/bash
+# to allow process substitution
+set +o posix
+{root_config or ""}
+mkdir -p {launch_dir}
+{{
+    {all_setup}
+    {f"sleep {delay}" if delay else ""}
+}} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
+""").strip()
 
     return host_unpack_script
 
 
 # noinspection PyShadowingBuiltins
-def make_launch_script(runners: Tuple[Runner],
-                       mounts: Sequence[Mount],
-                       unpack_on_host: Union[bool, None],
-                       type: str,
-                       launch_dir="~/jaynes-launch",
-                       pipe_out: bool = None,
-                       setup: str = None,
-                       terminate_after=False,
-                       delay: float = None,
-                       instance_name: str = None,
-                       root_config: dict = None, **_):
+def make_launch_script(
+    runners: Tuple[Runner],
+    mounts: Sequence[Mount],
+    unpack_on_host: Union[bool, None],
+    type: str,
+    launch_dir="~/jaynes-launch",
+    pipe_out: bool = None,
+    setup: str = None,
+    terminate_after=False,
+    delay: float = None,
+    instance_name: str = None,
+    root_config: dict = None,
+    **_,
+):
     """
     function to make the host script
 
@@ -104,23 +105,19 @@ def make_launch_script(runners: Tuple[Runner],
     :return:
     """
     log_setup = dedent(f"""
-        mkdir -p {launch_dir}
-        JAYNES_LAUNCH_DIR={launch_dir}
-        """)
+mkdir -p {launch_dir}
+JAYNES_LAUNCH_DIR={launch_dir}
+""").strip()
 
     if not pipe_out:
         log_path = os.path.join(launch_dir, "jaynes-launch.log")
         error_path = os.path.join(launch_dir, "jaynes-launch.err.log")
         pipe_out = pipe_out or f""" > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)"""
 
-    upload_script = '\n'.join(
-        [m.upload_script for m in mounts if hasattr(m, "upload_script") and m.upload_script]
-    )
+    upload_script = "\n".join([m.upload_script for m in mounts if hasattr(m, "upload_script") and m.upload_script])
     # does not unpack if the self.host_unpack_script has already been generated.
     if unpack_on_host:
-        host_unpack_script = "\n".join(
-            [m.host_setup for m in mounts if hasattr(m, "host_setup") and m.host_setup]
-        )
+        host_unpack_script = "\n".join([m.host_setup for m in mounts if hasattr(m, "host_setup") and m.host_setup])
     else:
         host_unpack_script = ""
     if instance_name:
@@ -146,7 +143,7 @@ def make_launch_script(runners: Tuple[Runner],
         run_scripts = " & \n".join([r.run_script.strip() for r in runners] + ["wait"])
     post_scripts = "\n".join([r.post_script for r in runners])
 
-    return f"""
+    return dedent(f"""
 #!/bin/bash
 # to allow process substitution
 set +o posix
@@ -167,4 +164,4 @@ set +o posix
 {post_scripts}
 {terminate_commands}
 }} {pipe_out or ""}
-""".strip()
+""").strip()

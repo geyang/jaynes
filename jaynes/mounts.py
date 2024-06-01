@@ -4,6 +4,7 @@ from textwrap import dedent
 from uuid import uuid4
 
 from jaynes.shell import check_call
+
 from .helpers import get_temp_dir
 
 
@@ -81,22 +82,40 @@ class S3Code(Mount):
     :return: self
     """
 
-    def __init__(self, *, prefix, local_path, host_path=None,
-                 volume=None, mount_path=None, sub_path=None,
-                 init_image="alpine:latest",
-                 init_image_pull_policy="IfNotPresent",
-                 init_image_pull_secret=None,
-                 remote_tar=None, container_path=None,
-                 docker_mount_type="bind",
-                 pypath=False, excludes=None, file_mask=None,
-                 name=None, compress=True, no_signin=False, acl=None, region=None,
-                 exclude_vcs=True, exclude_from=None, **tar_options):
+    def __init__(
+        self,
+        *,
+        prefix,
+        local_path,
+        host_path=None,
+        volume=None,
+        mount_path=None,
+        sub_path=None,
+        init_image="alpine:latest",
+        init_image_pull_policy="IfNotPresent",
+        init_image_pull_secret=None,
+        remote_tar=None,
+        container_path=None,
+        docker_mount_type="bind",
+        pypath=False,
+        excludes=None,
+        file_mask=None,
+        name=None,
+        compress=True,
+        no_signin=False,
+        acl=None,
+        region=None,
+        exclude_vcs=True,
+        exclude_from=None,
+        **tar_options,
+    ):
         # I fucking hate the behavior of python defaults. -- GY
         from .jaynes import RUN
+
         local_path = os.path.expandvars(local_path)
         local_abs = os.path.join(RUN.config_root, local_path)
 
-        tar_options = ' '.join([f"--{key.replace('_', '-')}={value}" for key, value in tar_options.items()])
+        tar_options = " ".join([f"--{key.replace('_', '-')}={value}" for key, value in tar_options.items()])
         if exclude_vcs:
             tar_options += " --exclude-vcs"
         if exclude_from:
@@ -159,15 +178,16 @@ class S3Code(Mount):
             "imagePullPolicy": init_image_pull_policy,
             "name": name,
             "command": ["/bin/bash"],
-            "args": ['-c'] + [init_script],
+            "args": ["-c"] + [init_script],
             "volumeMounts": [
-                {"name": volume, "mountPath": mount_path, }
-            ]}
+                {
+                    "name": volume,
+                    "mountPath": mount_path,
+                }
+            ],
+        }
 
-        self.volume_mount = {
-            "name": volume,
-            "mountPath": self.container_path,
-            "subPath": sub_path}
+        self.volume_mount = {"name": volume, "mountPath": self.container_path, "subPath": sub_path}
 
 
 class GSCode(Mount):
@@ -208,19 +228,36 @@ class GSCode(Mount):
     :return: self
     """
 
-    def __init__(self, *, prefix, local_path, host_path=None,
-                 volume=None, mount_path=None, sub_path=None, init_image="alpine:latest",
-                 init_image_pull_policy="IfNotPresent",
-                 remote_tar=None, container_path=None,
-                 docker_mount_type="bind",
-                 pypath=False, excludes=None, file_mask=None,
-                 name=None, compress=True, exclude_vcs=True, exclude_from=None, **tar_options):
+    def __init__(
+        self,
+        *,
+        prefix,
+        local_path,
+        host_path=None,
+        volume=None,
+        mount_path=None,
+        sub_path=None,
+        init_image="alpine:latest",
+        init_image_pull_policy="IfNotPresent",
+        remote_tar=None,
+        container_path=None,
+        docker_mount_type="bind",
+        pypath=False,
+        excludes=None,
+        file_mask=None,
+        name=None,
+        compress=True,
+        exclude_vcs=True,
+        exclude_from=None,
+        **tar_options,
+    ):
         # I fucking hate the behavior of python defaults. -- GY
         from .jaynes import RUN
+
         local_path = os.path.expandvars(local_path)
         local_abs = os.path.join(RUN.config_root, local_path)
 
-        tar_options = ' '.join([f"--{key.replace('_', '-')}={value}" for key, value in tar_options.items()])
+        tar_options = " ".join([f"--{key.replace('_', '-')}={value}" for key, value in tar_options.items()])
         if exclude_vcs:
             tar_options += " --exclude-vcs"
         if exclude_from:
@@ -283,15 +320,16 @@ class GSCode(Mount):
             "imagePullPolicy": init_image_pull_policy,
             "name": name,
             "command": ["/bin/bash"],
-            "args": ['-c'] + [init_script],
+            "args": ["-c"] + [init_script],
             "volumeMounts": [
-                {"name": volume, "mountPath": mount_path, }
-            ]}
+                {
+                    "name": volume,
+                    "mountPath": mount_path,
+                }
+            ],
+        }
 
-        self.volume_mount = {
-            "name": volume,
-            "mountPath": self.container_path,
-            "subPath": sub_path}
+        self.volume_mount = {"name": volume, "mountPath": self.container_path, "subPath": sub_path}
 
 
 class S3Output(Mount):
@@ -317,9 +355,7 @@ class S3Output(Mount):
     :return:
     """
 
-    def __init__(self, *, container_path, prefix, host_path=None, name=None, local_path=None, interval=15,
-                 pypath=False, sync_s3=True):
-
+    def __init__(self, *, container_path, prefix, host_path=None, name=None, local_path=None, interval=15, pypath=False, sync_s3=True):
         if host_path is None:
             host_path = f"/tmp/jaynes_mounts/{uuid4() if name is None else name}"
         else:
@@ -328,11 +364,13 @@ class S3Output(Mount):
         # used for getting the container log path
         self.host_path = host_path
 
-        assert os.path.isabs(container_path), \
-            "ATTENTION: docker path has to be absolute, to make sure your code knows where it is writing to."
+        assert os.path.isabs(
+            container_path
+        ), "ATTENTION: docker path has to be absolute, to make sure your code knows where it is writing to."
 
         if local_path:
             from .jaynes import RUN
+
             local_path = os.path.expandvars(local_path)
             local_abs = os.path.join(RUN.config_root, local_path)
 
@@ -346,14 +384,17 @@ class S3Output(Mount):
                 done & echo 'sync {local_path} initiated'
             """
         else:
-            print('S3UploadMount(**{}) generated no local_script.'.format(locals()))
+            print("S3UploadMount(**{}) generated no local_script.".format(locals()))
             # pass
         self.upload_script = f"""
                 aws s3 cp --recursive {host_path} {prefix} """  # --only-show-errors"""
         self.host_setup = f"""
                 echo 'making main_log directory {host_path}'
                 mkdir -p {host_path}
-                echo "made main_log directory" """ + ("" if not sync_s3 else f"""
+                echo "made main_log directory" """ + (
+            ""
+            if not sync_s3
+            else f"""
                 while true; do
                     echo "uploading..." {self.upload_script}
                     {f"sleep {interval}" if interval else ""}
@@ -369,7 +410,8 @@ class S3Output(Mount):
                         sleep 3
                     fi
                 done & echo main_log sync initiated
-                """)
+                """
+        )
         self.docker_mount = f"-v {host_path}:{container_path}"
         self.container_path = container_path
         self.pypath = pypath
@@ -394,10 +436,23 @@ class SSHCode(Mount):
     :return: self
     """
 
-    def __init__(self, *, local_path, local_tar=None, host_path=None, remote_tar=None,
-                 container_path=None, pypath=False, excludes=None, file_mask=None, name=None,
-                 compress=True, exclude_vcs=True, exclude_from=None, **tar_options):
-
+    def __init__(
+        self,
+        *,
+        local_path,
+        local_tar=None,
+        host_path=None,
+        remote_tar=None,
+        container_path=None,
+        pypath=False,
+        excludes=None,
+        file_mask=None,
+        name=None,
+        compress=True,
+        exclude_vcs=True,
+        exclude_from=None,
+        **tar_options,
+    ):
         # I fucking hate the behavior of python defaults. -- GY
         self.local_path = local_path
         self.host_path = host_path
@@ -411,11 +466,12 @@ class SSHCode(Mount):
         self.file_mask = file_mask or "."  # file_mask can Not be None or "".
 
         from .jaynes import RUN
+
         local_path = os.path.expandvars(local_path)
         local_abs = os.path.join(RUN.config_root, local_path)
         self.container_path = os.path.join(RUN.config_root, container_path) if container_path else local_abs
 
-        tar_options = ' '.join([f"--{key.replace('_', '-')}={value}" for key, value in tar_options.items()])
+        tar_options = " ".join([f"--{key.replace('_', '-')}={value}" for key, value in tar_options.items()])
         if exclude_vcs:
             tar_options += " --exclude-vcs"
         if exclude_from:
@@ -433,17 +489,17 @@ class SSHCode(Mount):
 
         self.remote_tar = remote_tar or f"/tmp/{tar_name}"
 
-        self.tar_script = f"""
+        self.tar_script = dedent(f"""
                 type gtar >/dev/null 2>&1 && alias tar=`which gtar`
                 mkdir -p {self.temp_dir}
                 # Do not use absolute path in tar.
                 tar {self.excludes} {tar_options} -c{"z" if self.compress else ""}f {self.local_tar} -C {local_abs} {self.file_mask}
-                """
+                """)
 
-        self.host_setup = f"""
+        self.host_setup = dedent(f"""
                 mkdir -p {self.host_path}
                 tar -{"z" if self.compress else ""}xf {self.remote_tar}{tar_name if self.remote_tar.endswith('/') else ''} -C {self.host_path}
-                """
+                """)
         # used by the docker runner
         self.docker_mount = f"-v {self.host_path}:{self.container_path}"
 
@@ -451,7 +507,7 @@ class SSHCode(Mount):
         _port = "" if port is None else f"-p {port}"
         _pem = "" if pem is None else f"-i {pem}"
 
-        ssh_string = f"ssh {_port} {_pem}" if _port or _pem else 'ssh'
+        ssh_string = f"ssh {_port} {_pem}" if _port or _pem else "ssh"
         mkdir_script = f"{ssh_string} {username}@{ip} mkdir -p {os.path.dirname(self.remote_tar)}"
         rsync_script = f"rsync -az -e '{ssh_string}' --info=progress2 {self.local_tar} {username}@{ip}:{self.remote_tar}"
         if password is not None:  # note: now supports password log in!
@@ -474,9 +530,23 @@ class TarMount(Mount):
     tar_path = None
     host_path = None
 
-    def __init__(self, *_, local_path, local_tar=None, remote_tar=None, host_path=None,
-                 container_path=None, pypath=False, name=None, excludes=None, file_mask=None,
-                 compress=True, exclude_vcs=True, exclude_from=None, **tar_options):
+    def __init__(
+        self,
+        *_,
+        local_path,
+        local_tar=None,
+        remote_tar=None,
+        host_path=None,
+        container_path=None,
+        pypath=False,
+        name=None,
+        excludes=None,
+        file_mask=None,
+        compress=True,
+        exclude_vcs=True,
+        exclude_from=None,
+        **tar_options,
+    ):
         self.local_path = local_path
         self.host_path = host_path
         self.container_path = container_path or host_path
@@ -489,10 +559,11 @@ class TarMount(Mount):
         self.excludes = excludes or "--exclude='*__pycache__' --exclude='*.git' --exclude='*.idea' --exclude='*.egg-info'"
 
         from .jaynes import RUN
+
         local_path = os.path.expandvars(local_path)
         local_abs = os.path.join(RUN.config_root, local_path)
 
-        tar_options = ' '.join([f"--{key.replace('_', '-')}={value}" for key, value in tar_options.items()])
+        tar_options = " ".join([f"--{key.replace('_', '-')}={value}" for key, value in tar_options.items()])
         if exclude_vcs:
             tar_options += " --exclude-vcs"
         if exclude_from:
@@ -525,7 +596,7 @@ class TarMount(Mount):
         from jaynes.client import JaynesClient
 
         if os.path.exists(self.local_tar):
-            print('local tar already exists', self.local_tar)
+            print("local tar already exists", self.local_tar)
         else:
             script = dedent(self.local_script)
             check_call(script, verbose=verbose, shell=True)
@@ -539,7 +610,7 @@ class TarMount(Mount):
         stdout, stderr, error = client.execute(f"ls {parent_dir} | grep {tar_name}")
 
         if tar_name in stdout:
-            print('remote tar already exists', self.remote_tar)
+            print("remote tar already exists", self.remote_tar)
             return
 
         client.execute(f"mkdir -p {parent_dir}")
@@ -547,6 +618,10 @@ class TarMount(Mount):
 
         stdout, *_ = client.execute(f"echo {parent_dir}")
         if verbose:
-            print(stdout, parent_dir, self.remote_tar, )
+            print(
+                stdout,
+                parent_dir,
+                self.remote_tar,
+            )
         stdout, *_ = client.execute(f"ls {parent_dir} | grep {tar_name}")
         assert tar_name in stdout, "file upload failed" + stdout

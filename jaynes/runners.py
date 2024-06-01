@@ -1,12 +1,15 @@
 import os
 from copy import deepcopy
 from datetime import datetime
+from textwrap import dedent
 
 import jaynes
+
 from .constants import JAYNES_PARAMS_KEY
 from .param_codec import serialize
 
 
+# fmt: off
 def inline(script: str) -> str:
     script = script.strip()
     if not script:
@@ -44,7 +47,7 @@ class Runner:
     def main_script_thunk(self):
         entry_env = f"{JAYNES_PARAMS_KEY}={{JYNS_encoded_thunk}}"
 
-        cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker `hostname`" 1>&2;"""
+        cmd = """printf "\\e[1;34m%-6s\\e[m\\n" "Running inside worker `hostname`" 1>&2;"""
         if self.startup:
             cmd += inline(self.startup)
         if self.work_dir:
@@ -132,7 +135,7 @@ class Slurm(Runner):
         super().__init__(mounts, work_dir, pypath, startup, entry_script, post_script)
 
         # --get-user-env
-        setup_cmd = f"""printf "\\e[1;34m%-6s\\e[m\\n" "Running on login-node `hostname`"\n"""
+        setup_cmd = """printf "\\e[1;34m%-6s\\e[m\\n" "Running on login-node `hostname`"\n"""
         setup_cmd += (setup.strip() + '\n') if setup else ''
         # remove
         # if pypath:
@@ -151,7 +154,7 @@ class Slurm(Runner):
         if name:
             option_str += f' --job-name="{name}"'
         if label:
-            option_str += f" --label"
+            option_str += " --label"
         if comment:
             option_str += f' --comment="{comment}"'
 
@@ -261,6 +264,97 @@ class Simple(Runner):
             """
 
 
+# fmt: on
+class Tmux(Runner):
+    """
+    Tmux Runner
+
+    Example
+    -------
+
+    to configure the Docker runner in :code:`jaynes.yml`, you can do
+
+    .. code:: yaml
+
+        # ⬇️ this is a yaml syntax to select the class
+        runner: !runners.Docker
+            name: "some-job"  # only for docker
+            image: "episodeyang/super-expert"
+            startup: yes | pip install jaynes ml-logger -q
+            envs: "LANG=utf-8"
+            pypath: "{mounts[0].container_path}"
+            work_dir: "{mounts[0].container_path}"
+            ipc: host
+            use_gpu: false
+
+    :param mounts: list, reserved by jaynes to pass in the mount objects.
+    :param work_dir: this is the current work directory for the bash script.
+    :param setup: the script you want to run outside, before the tmux session
+    :param mounts:
+    :param pypath:
+    :param startup: the script you want to run first INSIDE tmux session
+    :param envs: Set of environment key and variables, a string
+    :param entry_script: "python -u -m jaynes.entry"
+    :param name: Name of the tmux session container instance, use uuid if is None
+                ssh/bash session is not going to be tty.
+    :param tmux_cmd: The tmux new-session command to use.
+    :param daemon: Default to True, run in the background when set.
+                Note: The Non-daemon mode is not supported, because I can't figure out ssh -t (tty) with this.
+
+    :param post_script: a script attached to after run_script
+    :param exit_session_when_done: exits the tmux session in daemon mode when it is done. Not used in interactive mode.
+    :param **kwargs: passed in as parameters to tmux session command.
+                memory="4g" gets translated into `--memory 4g`
+    """
+
+    def __init__(
+        self,
+        *,
+        mounts=None,
+        work_dir=None,
+        setup="",
+        startup=None,
+        pypath=None,
+        envs=None,
+        entry_script="python -u -m jaynes.entry",
+        name=None,
+        tmux_cmd="tmux new-session",
+        daemon=True,
+        # The Non-daemon mode is not supported, because I can't figure out ssh -t (tty) with this.
+        post_script="",
+        exit_session_when_done=False,
+        **options,
+    ):
+        super().__init__(mounts, work_dir, pypath, startup, entry_script, post_script)
+
+        self.setup_script = setup
+
+        # dynamically generate the job name to avoid conflict
+        job_name = name or f"jaynes-job-{datetime.utcnow():%H%M%S}-{jaynes.RUN.count}"
+
+        config = ""
+        for env_string in envs.strip().split(" "):
+            config += f"-e {env_string} "
+
+        rest_config = " ".join(f"--{k.replace('_', '-')}={v}" for k, v in options.items())
+
+        # note: there can not be end of line characters.
+        # fmt: off
+        self.run_script_thunk = dedent(f"""
+            printf "\e[1;34m%-6s\e[m\\n" "Launching tmux inside `hostname`"
+            {tmux_cmd}{' -d' if daemon else ''} -s '{job_name}' {config} {rest_config} bash -c '{{JYNS_main_script}}{" && exit" if exit_session_when_done else ""}'
+            printf "\e[1;34m%-6s\e[m\\n" "Launched session {job_name}"
+            """).strip()
+
+    chain = None
+    # def chain(self, fn, *args, __sep=" &\n", **kwargs):
+    #     encoded_thunk = serialize(fn, args, kwargs)
+    #     self.main_script = self.main_script_thunk.format(JYNS_encoded_thunk=encoded_thunk)
+    #     self.run_script += __sep + self.run_script_thunk.format(JYNS_main_script=self.main_script).strip()
+
+
+# fmt: off
+
 class Docker(Runner):
     """
     Docker Runner
@@ -312,7 +406,7 @@ class Docker(Runner):
         mount_string = " ".join([m.docker_mount for m in mounts])
         self.setup_script = setup
 
-        is_gpu = options.get('gpus', None) or "nvidia" in docker_cmd
+        # is_gpu = options.get('gpus', None) or "nvidia" in docker_cmd
 
         # dynamically generate the job name to avoid conflict
         docker_container_name = name or f"jaynes-job-{datetime.utcnow():%H%M%S}-{jaynes.RUN.count}"
@@ -336,16 +430,18 @@ echo -ne 'remove existing container '
 
         rest_config = " ".join(f"--{k.replace('_', '-')}={v}" for k, v in options.items())
 
-        test_gpu = f"""
-            echo 'Testing nvidia-smi inside docker'
-            {docker_cmd} run --rm {rest_config} {image} nvidia-smi
-            """
+        # test_gpu = f"""
+        #     echo 'Testing nvidia-smi inside docker'
+        #     {docker_cmd} run --rm {rest_config} {image} nvidia-smi
+        #     """
+
         # note: always connect the docker to stdin and stdout.
-        self.run_script_thunk = f"""
-{remove_by_name if name else ""}
-echo 'running {image} on' `hostname`
-{docker_cmd} run -i{"t" if tty else ""} {config} {rest_config} {mount_string} --name '{docker_container_name}' \\
-{image} {shell} -c '{{JYNS_main_script}} & wait' """
+        self.run_script_thunk = dedent(f"""
+            {remove_by_name if name else ""}
+            echo 'running {image} on' `hostname`
+            {docker_cmd} run -i{"t" if tty else ""} {config} {rest_config} {mount_string} --name '{docker_container_name}' \\
+            {image} {shell} -c '{{JYNS_main_script}} & wait' 
+            """).strip() # add strip to make this more robust, and dedent.
 
     chain = None
     # def chain(self, fn, *args, __sep=" &\n", **kwargs):
@@ -354,6 +450,7 @@ echo 'running {image} on' `hostname`
     #     self.run_script += __sep + self.run_script_thunk.format(JYNS_main_script=self.main_script).strip()
 
 
+# fmt: on
 class Container(Runner):
     """
     Container Runner for Kubernetes
@@ -395,43 +492,51 @@ class Container(Runner):
     :param post_script: a script attached to after run_script
     :param **kwargs: Not used
     """
+
     job = None
 
-    def __init__(self, *, image,
-                 image_pull_policy="IfNotPresent",
-                 image_pull_secret=None,
-                 mounts=None,
-                 work_dir=None,
-                 workdir=None,
-                 setup="",
-                 startup=None,
-                 namespace=None,
-                 pypath=None,
-                 envs=None,
-                 shell="/bin/sh",
-                 entry_script="python -u -m jaynes.entry", name=None,
-                 docker_cmd="docker",
-                 ipc=None,
-                 tty=False,
-                 gpu=0,
-                 gpu_types=None,
-                 gpu_limit=0,
-                 post_script="",
-                 net=None,
-                 volumes=None,
-                 cpu="50m", mem="50Mi",
-                 cpu_limit=None, mem_limit=None,
-                 restart_policy="Never",
-                 backoff_limit=1,
-                 ttl_seconds_after_finished=3600,
-                 **options):
+    def __init__(
+        self,
+        *,
+        image,
+        image_pull_policy="IfNotPresent",
+        image_pull_secret=None,
+        mounts=None,
+        work_dir=None,
+        workdir=None,
+        setup="",
+        startup=None,
+        namespace=None,
+        pypath=None,
+        envs=None,
+        shell="/bin/sh",
+        entry_script="python -u -m jaynes.entry",
+        name=None,
+        docker_cmd="docker",
+        ipc=None,
+        tty=False,
+        gpu=0,
+        gpu_types=None,
+        gpu_limit=0,
+        post_script="",
+        net=None,
+        volumes=None,
+        cpu="50m",
+        mem="50Mi",
+        cpu_limit=None,
+        mem_limit=None,
+        restart_policy="Never",
+        backoff_limit=1,
+        ttl_seconds_after_finished=3600,
+        **options,
+    ):
         super().__init__(mounts, work_dir, pypath, startup, entry_script, post_script)
 
         # self.mounts reuses the mounts from the Runner class
         init_containers = [m.init_container for m in self.mounts]
         volume_mounts = [m.volume_mount for m in self.mounts]
 
-        self.is_gpu = options.get('gpus', None) or "nvidia" in docker_cmd
+        self.is_gpu = options.get("gpus", None) or "nvidia" in docker_cmd
 
         if not gpu_limit:
             gpu_limit = gpu
@@ -472,27 +577,24 @@ class Container(Runner):
                         "containers": [],
                         "restartPolicy": restart_policy,
                     },
-
                 },
                 "backoffLimit": backoff_limit,
-                "ttlSecondsAfterFinished": ttl_seconds_after_finished
+                "ttlSecondsAfterFinished": ttl_seconds_after_finished,
             },
         }
         if image_pull_secret:
-            self.job_template['spec']['template']['spec']["imagePullSecrets"] = [{"name": image_pull_secret}]
+            self.job_template["spec"]["template"]["spec"]["imagePullSecrets"] = [{"name": image_pull_secret}]
 
         if gpu_types is not None:
-            affinity = {"nodeAffinity": {
-                "requiredDuringSchedulingIgnoredDuringExecution": {
-                    "nodeSelectorTerms": [{
-                        "matchExpressions": [{
-                            "key": "nvidia.com/gpu.product",
-                            "operator": "In",
-                            "values": gpu_types.split(',')
-                        }]
-                    }]
+            affinity = {
+                "nodeAffinity": {
+                    "requiredDuringSchedulingIgnoredDuringExecution": {
+                        "nodeSelectorTerms": [
+                            {"matchExpressions": [{"key": "nvidia.com/gpu.product", "operator": "In", "values": gpu_types.split(",")}]}
+                        ]
+                    }
                 }
-            }}
+            }
             self.job_template["spec"]["template"]["spec"]["affinity"] = affinity
 
     def build(self, fn, *args, __sep="\n", **kwargs):
@@ -503,8 +605,8 @@ class Container(Runner):
             self.job = deepcopy(self.job_template)
 
         container = deepcopy(self.container_template)
-        container['command'].append(self.main_script)
-        self.job['spec']['template']['spec']['containers'].append(container)
+        container["command"].append(self.main_script)
+        self.job["spec"]["template"]["spec"]["containers"].append(container)
 
     def chain(self, fn, *args, __sep=" &\n", **kwargs):
         encoded_thunk = serialize(fn, args, kwargs)
@@ -512,9 +614,11 @@ class Container(Runner):
 
         assert self.job is not None
 
-        command_list = self.job['spec']['template']['spec']['containers'][-1]['command']
+        command_list = self.job["spec"]["template"]["spec"]["containers"][-1]["command"]
 
         if command_list[-1].endswith("& wait"):
             command_list[-1] = command_list[-1][:-6]
 
         command_list[-1] += "&\n" + self.main_script + "& wait"
+
+    # fmt: off

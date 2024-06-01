@@ -18,24 +18,24 @@ def launch_local_docker(mounts, runners, unpack_host=True, log_dir="/tmp/jaynes-
     )
 
     remote_script = dedent(f"""
-        #!/bin/bash
-        # to allow process substitution
-        set +o posix
-        {root_config or ""}
-        mkdir -p {log_dir}
-        {{
-            {host_setup}
+#!/bin/bash
+# to allow process substitution
+set +o posix
+{root_config or ""}
+mkdir -p {log_dir}
+{{
+{host_setup}
 
-            # upload_script
-            {upload_script}
+# upload_script
+{upload_script}
 
-            {runners[0].setup_script}
-            {runners[0].run_script}
-            {runners[0].post_script}
-            
-            {f"sleep {delay}" if delay else ""}
-        }} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
-        """).strip()
+{runners[0].setup_script}
+{runners[0].run_script}
+{runners[0].post_script}
+
+{f"sleep {delay}" if delay else ""}
+}} > >(tee -a {log_path}) 2> >(tee -a {error_path} >&2)
+""").strip()
     if verbose:
         print(remote_script)
     if not dry:
