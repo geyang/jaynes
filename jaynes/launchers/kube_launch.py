@@ -1,17 +1,29 @@
 from datetime import datetime
 
 import jaynes
-from jaynes.launchers.base_launcher import Launcher, make_launch_script
+from jaynes.launchers.base_launcher import Launcher
 from jaynes.runners import Runner
 
 
 class Kube(Launcher):
     jobs = None
-    def __init__(self, namespace=None, verbose=False, name=None, tags={}, **_):
-        super().__init__(namespace=namespace,
-                         verbose=verbose,
-                         name=name or f"jaynes-job-{datetime.utcnow():%H%M%S}-{jaynes.RUN.count}",
-                         tags=tags, **_)
+
+    def __init__(
+        self,
+        namespace=None,
+        verbose=False,
+        name=None,
+        tags={},
+        **_,
+    ):
+        super().__init__(
+            namespace=namespace,
+            verbose=verbose,
+            name=name or f"jaynes-job-{datetime.utcnow():%H%M%S}-{jaynes.RUN.count}",
+            tags=tags,
+            **_,
+        )
+
         if self.jobs is None:
             self.jobs = []
 
@@ -33,19 +45,27 @@ class Kube(Launcher):
 
     def execute(self, verbose=None):
         import yaml
+
         self.plan_instance(verbose=verbose)
 
         from tempfile import NamedTemporaryFile
 
         # packing all jobs into one request and launch
-        with NamedTemporaryFile(mode="w+", suffix="jaynes-kube.yaml", delete=False) as config_file:
+        with NamedTemporaryFile(
+            mode="w+",
+            suffix="jaynes-kube.yaml",
+            delete=not verbose,
+        ) as config_file:
             yaml.dump_all(self.jobs, config_file, default_flow_style=False)
+
             self.jobs.clear()
+
             if verbose:
-                print('dumping the kubernetes job yaml file to ' + config_file.name)
+                print("dumping the kubernetes job yaml file to " + config_file.name)
+
             from subprocess import Popen, PIPE
 
-            proc = Popen(f"kubectl apply -f " + config_file.name, shell=True, stdout=PIPE)
+            proc = Popen("kubectl apply -f " + config_file.name, shell=True, stdout=PIPE)
             outs = []
             while True:
                 out = proc.stdout.read1().decode("utf-8")

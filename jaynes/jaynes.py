@@ -214,8 +214,12 @@ class Jaynes:
                 try:
                     hydrated_runner_config[k] = v.format(**context)
                 except IndexError as e:
-                    a = '\n'
-                    print(f"{k} '{v}' context: {list(context.items())}")
+                    print(f"context: {list(context.items())}")
+                    print(f"String interpolation failed for {v}")
+                    raise e
+                except KeyError as e:
+                    print(f"context: {list(context.items())}")
+                    print(f"String interpolation failed for {v}")
                     raise e
             else:
                 hydrated_runner_config[k] = v

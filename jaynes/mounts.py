@@ -79,6 +79,12 @@ class S3Code(Mount):
                 This is needed for aws s3 download without credentials.
     :param no_sign: Whether to sign the s3 url. When set to true, the aws s3 download does not require credientials.
                     This needs to be used with the [acl: "public-read"] option.
+    :param region: The region to upload the s3 object to. Default to None.
+    :param exclude_vcs: Whether to exclude version control files. Default to True.
+    :param exclude_from: The path to the file containing the exclude patterns. Default to None.
+
+    :param cpu: The cpu request for the init container. Default to 1.
+    :param mem: The memory request for the init container. Default to "1Gi".
     :return: self
     """
 
@@ -107,6 +113,8 @@ class S3Code(Mount):
         region=None,
         exclude_vcs=True,
         exclude_from=None,
+        cpu=1,
+        mem="1Gi",
         **tar_options,
     ):
         # I fucking hate the behavior of python defaults. -- GY
@@ -171,6 +179,7 @@ class S3Code(Mount):
 
         self.pypath = pypath
         self.docker_mount = f"--mount type={docker_mount_type},source={host_path},target={self.container_path}"
+
         init_script = self.host_setup.strip()
         self.init_container = {
             "image": init_image,
@@ -179,6 +188,16 @@ class S3Code(Mount):
             "name": name,
             "command": ["/bin/bash"],
             "args": ["-c"] + [init_script],
+            "resources": {
+                "requests": {
+                    "memory": mem,
+                    "cpu": cpu,
+                },
+                "limits": {
+                    "memory": mem,
+                    "cpu": cpu,
+                },
+            },
             "volumeMounts": [
                 {
                     "name": volume,
@@ -225,6 +244,11 @@ class GSCode(Mount):
     :param pypath (bool): Whether this directory should be added to the python path
     :param excludes: The files paths to exclude, default to "--exclude='*__pycache__'"
     :param file_mask: The file mask for files to include. Default to "."
+    :param compress: Whether to compress the tar ball. Default to true
+    :param exclude_vcs: Whether to exclude version control files. Default to True.
+    :param exclude_from: The path to the file containing the exclude patterns. Default to None.
+    :param cpu: The cpu request for the init container. Default to 1.
+    :param mem: The memory request for the init container. Default to "1Gi".
     :return: self
     """
 
@@ -249,6 +273,8 @@ class GSCode(Mount):
         compress=True,
         exclude_vcs=True,
         exclude_from=None,
+        mem="1Gi",
+        cpu=1,
         **tar_options,
     ):
         # I fucking hate the behavior of python defaults. -- GY
@@ -321,6 +347,16 @@ class GSCode(Mount):
             "name": name,
             "command": ["/bin/bash"],
             "args": ["-c"] + [init_script],
+            "resources": {
+                "requests": {
+                    "memory": mem,
+                    "cpu": cpu,
+                },
+                "limits": {
+                    "memory": mem,
+                    "cpu": cpu,
+                },
+            },
             "volumeMounts": [
                 {
                     "name": volume,
