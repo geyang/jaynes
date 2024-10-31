@@ -46,14 +46,17 @@ class EC2(Launcher):
 
 def launch_ec2(launch_script, image_id, instance_type, key_name, security_group, spot_price=None,
                iam_instance_profile_arn=None, region=None, availability_zone=None,
-               dry=False, name=None, tags={}, verbose=False, **_):
+               dry=False, name=None, tags={}, verbose=False, security_group_id=None, **_):
     from termcolor import cprint
     import boto3
     if verbose:
         print('Using the default AWS Profile')
 
+    # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2/client/request_spot_instances.html
+    print("ID")
+    print(security_group_id)
     instance_config = dict(ImageId=image_id, KeyName=key_name, InstanceType=instance_type,
-                           SecurityGroups=(security_group,),
+                           SecurityGroupIds=(security_group_id,),
                            IamInstanceProfile={'Arn': iam_instance_profile_arn})
     if availability_zone:
         instance_config['Placement'] = dict(AvailabilityZone=availability_zone)
