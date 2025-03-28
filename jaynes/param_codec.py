@@ -1,25 +1,29 @@
-import pickle
-
 import base64
-from typing import Any, Dict, Tuple
-
 import cloudpickle
+import pickle
+from typing import Any, Dict, Tuple
 
 
 def deserialize(code):
-    data = cloudpickle.loads(base64.b64decode(code))
-    return data['thunk'], data['args'] or (), data['kwargs'] or {}
+    blob = base64.b64decode(code)
+    data = cloudpickle.loads(blob)
+    return data["thunk"], data["args"] or (), data["kwargs"] or {}
 
 
-def serialize(fn, args: Tuple[Any] = None, kwargs: Dict[Any, Any] = None,
-              protocol=pickle.DEFAULT_PROTOCOL):
+def serialize(
+    fn,
+    args: Tuple[Any] = None,
+    kwargs: Dict[Any, Any] = None,
+    protocol=pickle.DEFAULT_PROTOCOL,
+):
     """
     for protocol see: https://stackoverflow.com/a/23582505/1560241
-    :param fn:
+    :param fn: the target function to serialize
     :param args:
     :param kwargs:
     :param protocole:
     :return:
     """
-    code = cloudpickle.dumps(dict(thunk=fn, args=args, kwargs=kwargs), protocol=protocol)
+    payload = dict(thunk=fn, args=args, kwargs=kwargs)
+    code = cloudpickle.dumps(payload, protocol=protocol)
     return base64.b64encode(code).decode("ascii")

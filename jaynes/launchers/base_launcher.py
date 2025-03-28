@@ -1,10 +1,10 @@
 import os
 from textwrap import dedent
-from typing import Union, Tuple, Sequence
+from typing import Sequence, Tuple, Union
 
 from jaynes.mounts import Mount
 from jaynes.runners import Runner
-from jaynes.templates import ec2_terminate, gce_terminate, ec2_tag_instance
+from jaynes.templates import ec2_tag_instance, ec2_terminate, gce_terminate
 
 
 class Launcher:
@@ -134,21 +134,21 @@ JAYNES_LAUNCH_DIR={launch_dir}
         else:
             raise NotImplementedError(f"terminate_after is not supported with {type}")
 
-    setup_scripts = "\n".join([r.setup_script for r in runners])
+    setup_scripts = "\n".join([r.setup_script for r in runners if r.setup_script]).strip()
     # note: add wait at the end to terminate process only after all launch scripts finish. Always blocking
     if len(runners) == 1:
         run_scripts = runners[0].run_script.strip()
     else:
         # todo: does not return the correct exit code.
-        run_scripts = " & \n".join([r.run_script.strip() for r in runners] + ["wait"])
-    post_scripts = "\n".join([r.post_script for r in runners])
+        run_scripts = " & \n".join([r.run_script.strip() for r in runners if r.run_script.strip()] + ["wait"])
+    post_scripts = "\n".join([r.post_script for r in runners if r.post_script]).strip()
 
     return dedent(f"""
 #!/bin/bash
 # to allow process substitution
 set +o posix
-{root_config or ''}
-{log_setup or ''}
+{root_config or ""}
+{log_setup or ""}
 {{
 # launch.setup script
 {setup or ""}
