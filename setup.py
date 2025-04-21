@@ -29,7 +29,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         "aiofile",
-        "cloudpickle==1.3.0",
+        "cloudpickle==3.1.1",
         "functional_notations",
         "params-proto>=2.10.0",
         "pyyaml",

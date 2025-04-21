@@ -42,3 +42,5 @@ test:
 	pwd && \
 	python -m pytest --capture=no
 
+clean:
+	rm -rf build dist jaynes.egg-info
