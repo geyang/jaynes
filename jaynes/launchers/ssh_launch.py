@@ -24,6 +24,8 @@ def ssh(
     dry=False,
     verbose=False,
     options="",
+    stdout=None,
+    stderr=None,
     **_,
 ):
     """
@@ -84,7 +86,7 @@ def ssh(
     # note: first pre-upload the script
     if prelaunch_upload_script:
         # done: separate out the two commands
-        p = check_call(prelaunch_upload_script, verbose=verbose, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+        p = check_call(prelaunch_upload_script, verbose=verbose, shell=True, stdout=stdout or sys.stdout, stderr=stderr or sys.stderr)
         if profile is not None:
             p.communicate(bytes(f"{password}\n"))
 
@@ -107,10 +109,13 @@ def ssh(
     elif console_mode:
         p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
-        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=sys.stdout, stderr=sys.stderr)
+        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=stdout or sys.stdout, stderr=stderr or sys.stderr)
 
     p.stdin.write(bytes(pipe_in, "utf-8"))
     p.stdin.flush()
+    p.stdin.close()
+
+    return p
 
 
 class SSH(Launcher):

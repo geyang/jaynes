@@ -1,11 +1,12 @@
 import os
+import sys
 from textwrap import dedent
 
 from jaynes.shell import check_call
 
 
 def launch_local_docker(mounts, runners, unpack_host=True, log_dir="/tmp/jaynes-mount", delay=None, verbose=False, dry=False,
-                        root_config=None):
+                        root_config=None, stdout=None, stderr=None):
     # the log_dir is primarily used for the run script. Therefore it should use ued here instead.
     log_path = os.path.join(log_dir, "jaynes-launch.log")
     error_path = os.path.join(log_dir, "jaynes-launch.err.log")
@@ -39,5 +40,5 @@ mkdir -p {log_dir}
     if verbose:
         print(remote_script)
     if not dry:
-        return check_call(remote_script, shell=True)
+        return check_call(remote_script, shell=True, stdout=stdout or sys.stdout, stderr=stderr or sys.stderr)
     return
