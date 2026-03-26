@@ -127,6 +127,73 @@ class Slurm(Runner):
     :param options: you can specify extra options beyond what is offered above.
     """
 
+    @staticmethod
+    def discover_nodes(retries=3, retry_delay=5):
+        """Query SLURM ``sinfo`` to discover idle and non-idle nodes.
+
+        Uses jaynes's configured SSH launcher to run ``sinfo`` on the
+        login/ctrl node — the same node that ``srun``/``sbatch`` would
+        target.  Call ``jaynes.config()`` before using this method.
+
+        Returns
+        -------
+        (idle, down) : tuple[list[str], list[str]]
+            Lists of idle and non-idle node names.
+
+        Example
+        -------
+
+        .. code:: python
+
+            jaynes.config()  # sets up SSH to the ctrl/login node
+            idle, down = jaynes.runners.Slurm.discover_nodes()
+        """
+        import time as _time
+        from .launchers.ssh_launch import ssh
+
+        launch_config = jaynes.Jaynes.launcher.config if jaynes.Jaynes.launcher else {}
+
+        sinfo_script = "sinfo -h -N -o '%N %T'"
+
+        last_err = None
+        for attempt in range(1, retries + 1):
+            try:
+                result = ssh(sinfo_script, block=True, cleanup=False,
+                             **{k: v for k, v in launch_config.items()
+                                if k not in ("launch_dir", "type", "block")})
+                if isinstance(result, tuple):
+                    stdout_data, stderr_data = result
+                    stdout_text = stdout_data.decode() if isinstance(stdout_data, bytes) else stdout_data
+                    stderr_text = stderr_data.decode() if isinstance(stderr_data, bytes) else stderr_data
+                    if stderr_text and "error" in stderr_text.lower():
+                        last_err = stderr_text.strip()
+                    else:
+                        break
+                else:
+                    last_err = "unexpected ssh return"
+            except Exception as e:
+                last_err = str(e)
+
+            if attempt < retries:
+                print(f"  sinfo attempt {attempt}/{retries} failed ({last_err}), "
+                      f"retrying in {retry_delay}s...")
+                _time.sleep(retry_delay)
+        else:
+            raise RuntimeError(f"sinfo failed after {retries} attempts: {last_err}")
+
+        idle, down = [], []
+        for line in stdout_text.strip().splitlines():
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            name, state = parts[0], parts[1]
+            if "idle" in state:
+                idle.append(name)
+            else:
+                down.append(name)
+
+        return idle, down
+
     def __init__(self, *, mounts=None, work_dir, pypath=None, setup="", startup=None, envs=None,
                  n_gpu=None, shell="/bin/sh", entry_script="python -u -m jaynes.entry",
                  partition=None, interactive=True, n_seq_jobs=1, time_limit: str = None, n_cpu=4, name=None,

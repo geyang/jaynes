@@ -81,6 +81,7 @@ def make_launch_script(
     pipe_out: bool = None,
     setup: str = None,
     terminate_after=False,
+    cleanup_on_exit=False,
     delay: float = None,
     instance_name: str = None,
     root_config: dict = None,
@@ -143,10 +144,13 @@ JAYNES_LAUNCH_DIR={launch_dir}
         run_scripts = " & \n".join([r.run_script.strip() for r in runners if r.run_script.strip()] + ["wait"])
     post_scripts = "\n".join([r.post_script for r in runners if r.post_script]).strip()
 
+    cleanup_trap = "trap 'kill 0' EXIT" if cleanup_on_exit else ""
+
     return dedent(f"""
 #!/bin/bash
 # to allow process substitution
 set +o posix
+{cleanup_trap}
 {root_config or ""}
 {log_setup or ""}
 {{
