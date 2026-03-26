@@ -285,12 +285,28 @@ class Jaynes:
 
     @classmethod
     def execute(J, verbose=None):
+        from .process import JaynesProcess
+
         verbose = verbose or J.verbose
         J.launcher.setup_host(verbose=verbose)
-        if J.launcher.last_runner:
-            return J.launcher.execute(verbose=verbose)
-        else:
+        if not J.launcher.last_runner:
             raise ValueError("No runners in launcher")
+
+        proc = J.launcher.execute(verbose=verbose)
+        if proc is None:
+            return None
+
+        # Collect log file handles passed through launch config
+        log_files = []
+        config = getattr(J.launcher, 'config', {})
+        for key in ('stdout', 'stderr'):
+            fh = config.get(key)
+            if fh is not None and hasattr(fh, 'close'):
+                log_files.append(fh)
+        # deduplicate (stdout and stderr may be the same file)
+        log_files = list(dict.fromkeys(log_files))
+
+        return JaynesProcess(proc, log_files=log_files)
 
     @classmethod
     def run(J, fn, *args, **kwargs, ):

@@ -1,4 +1,6 @@
 import os
+import signal
+import subprocess
 import sys
 import tempfile
 from textwrap import dedent
@@ -7,6 +9,85 @@ from jaynes.helpers import omit
 from jaynes.launchers.base_launcher import Launcher, make_host_unpack_script, make_launch_script
 from jaynes.shell import check_call
 from jaynes.templates import ssh_remote_exec
+
+
+class SSHPopen:
+    """Wraps a subprocess.Popen that runs an SSH session.
+
+    Adds the ability to kill the *remote* process tree when terminating,
+    not just the local SSH client.
+    """
+
+    def __init__(self, proc, ip, username="ubuntu", port=None, pem=None, options=""):
+        self._proc = proc
+        self._ip = ip
+        self._username = username
+        self._port = port
+        self._pem = pem
+        self._options = options
+
+    # ── proxy standard Popen attributes ──
+    @property
+    def pid(self):
+        return self._proc.pid
+
+    @property
+    def returncode(self):
+        return self._proc.returncode
+
+    @property
+    def stdin(self):
+        return self._proc.stdin
+
+    @property
+    def stdout(self):
+        return self._proc.stdout
+
+    @property
+    def stderr(self):
+        return self._proc.stderr
+
+    def poll(self):
+        return self._proc.poll()
+
+    def wait(self, timeout=None):
+        return self._proc.wait(timeout=timeout)
+
+    def communicate(self, input=None, timeout=None):
+        return self._proc.communicate(input=input, timeout=timeout)
+
+    def kill(self):
+        self._kill_remote()
+        self._kill_local(sig=signal.SIGKILL)
+
+    def terminate(self):
+        self._kill_remote()
+        self._kill_local(sig=signal.SIGTERM)
+
+    def _kill_local(self, sig=signal.SIGTERM):
+        try:
+            os.killpg(os.getpgid(self._proc.pid), sig)
+        except (ProcessLookupError, OSError):
+            try:
+                self._proc.send_signal(sig)
+            except (ProcessLookupError, OSError):
+                pass
+
+    def _kill_remote(self):
+        """SSH into the node and kill any jaynes.entry processes."""
+        ssh_cmd = ["ssh",
+                   "-o", "ConnectTimeout=5",
+                   "-o", "StrictHostKeyChecking=no"]
+        if self._port:
+            ssh_cmd += ["-p", str(self._port)]
+        if self._pem:
+            ssh_cmd += ["-i", self._pem]
+        ssh_cmd += [f"{self._username}@{self._ip}",
+                    "pkill -f 'python.*jaynes.entry'"]
+        try:
+            subprocess.run(ssh_cmd, timeout=10, capture_output=True)
+        except Exception:
+            pass
 
 
 def ssh(
@@ -24,6 +105,8 @@ def ssh(
     dry=False,
     verbose=False,
     options="",
+    stdout=None,
+    stderr=None,
     **_,
 ):
     """
@@ -84,7 +167,7 @@ def ssh(
     # note: first pre-upload the script
     if prelaunch_upload_script:
         # done: separate out the two commands
-        p = check_call(prelaunch_upload_script, verbose=verbose, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+        p = check_call(prelaunch_upload_script, verbose=verbose, shell=True, stdout=stdout or sys.stdout, stderr=stderr or sys.stderr)
         if profile is not None:
             p.communicate(bytes(f"{password}\n"))
 
@@ -98,19 +181,22 @@ def ssh(
         print(">> ssh pipe-in: ")
         print(pipe_in)
 
-    import subprocess
-
     if block:
-        # todo: not supported. stdout, stderr, requires subprocess.PIPE for the two.
-        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             start_new_session=True)
         return p.communicate(bytes(pipe_in, "utf-8"))
     elif console_mode:
-        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             start_new_session=True)
     else:
-        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=sys.stdout, stderr=sys.stderr)
+        p = subprocess.Popen(launch, shell=True, stdin=subprocess.PIPE, stdout=stdout or sys.stdout, stderr=stderr or sys.stderr,
+                             start_new_session=True)
 
     p.stdin.write(bytes(pipe_in, "utf-8"))
     p.stdin.flush()
+    p.stdin.close()
+
+    return SSHPopen(p, ip=ip, username=username, port=port, pem=pem, options=options)
 
 
 class SSH(Launcher):
